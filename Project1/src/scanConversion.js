@@ -35,24 +35,26 @@ function drawLine(cxt, x1, y1, x2, y2, color) {
 	cxt.stroke();
 }
 
-var c = document.getElementById("myCanvas");
-var cxt = c.getContext("2d");
-
-// 将canvas坐标整体偏移0.5，用于解决宽度为1个像素的线段的绘制问题，具体原理详见project文档
-cxt.translate(0.5, 0.5);
-
-for (y = 0; y < 255; y++) {
-	for (x = 0; x < 255; x += 1) {
-		color = [ y % 255, x % 255, 0 ];// 这里根据坐标计算颜色，因为颜色分量必须在0~255之间，所以这里用了取余运算
-		drawPoint(cxt, x, y, color);
-	}
-}
-for (y = 0; y < 255; y++) {
-	color = [ 0, 0, y % 255 ];// 这里根据坐标计算颜色，因为颜色分量必须在0~255之间，所以这里用了取余运算
-	drawLine(cxt, 300, y, 555, y, color);
-}
-
-for (var x = 0, offset = 0; x < 200; x += 10, offset += 0.1) {
-	color = [ 0, 0, 180 ];
-	drawLine(cxt, x, 280 + offset, x + 9, 280 + offset, color);
+window.onload = function() {
+	var c = document.getElementById("myCanvas");
+	c.width = canvasSize.maxX;
+	c.height = canvasSize.maxY;
+	var cxt = c.getContext("2d");
+	// 将canvas坐标整体偏移0.5，用于解决宽度为1个像素的线段的绘制问题，具体原理详见project文档
+	cxt.translate(0.5, 0.5);
+//	for (y = 0; y < 255; y++) {
+//		for (x = 0; x < 255; x += 1) {
+//			color = [ y % 255, x % 255, 0 ];// 这里根据坐标计算颜色，因为颜色分量必须在0~255之间，所以这里用了取余运算
+//			drawPoint(cxt, x, y, color);
+//		}
+//	}
+//	for (y = 0; y < 255; y++) {
+//		color = [ 0, 0, y % 255 ];// 这里根据坐标计算颜色，因为颜色分量必须在0~255之间，所以这里用了取余运算
+//		drawLine(cxt, 300, y, 555, y, color);
+//	}
+//
+//	for (var x = 0, offset = 0; x < 200; x += 10, offset += 0.1) {
+//		color = [ 0, 0, 180 ];
+//		drawLine(cxt, x, 280 + offset, x + 9, 280 + offset, color);
+//	}
 }
