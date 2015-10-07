@@ -29,6 +29,30 @@ function drawLine(cxt, x1, y1, x2, y2, color) {
 	cxt.stroke();
 }
 
+function drawCircle() {
+	for (i = 0; i < vertex_pos.length; i++) {
+		cxt.beginPath();
+		cxt.arc(vertex_pos[i][0], vertex_pos[i][1], 10, 0, 2 * Math.PI, true);
+		cxt.closePath();
+		cxt.fillStyle = "rgb(255,0,0)";
+		cxt.fill();
+		cxt.strokeStyle = "rgb(0,0,0)";
+		cxt.stroke();
+	}
+}
+
+function fillPolygon(cxt, polygon) {
+	var vertex = [];
+	for (var i = 0; i < 4; i++) {
+		vertex[i] = vertex_pos[polygon[i]];
+	}
+	var color = vertex_color[polygon[0]];
+	for (var i = 0; i < 4; i++) {
+		drawLine(cxt, vertex[i % 4][0], vertex[i % 4][1],
+				vertex[(i + 1) % 4][0], vertex[(i + 1) % 4][1], color);
+	}
+}
+
 window.onload = function() {
 	canvas = document.getElementById("myCanvas");
 	canvas.width = canvasSize.maxX;
@@ -36,6 +60,8 @@ window.onload = function() {
 	cxt = canvas.getContext("2d");
 	// 将canvas坐标整体偏移0.5，用于解决宽度为1个像素的线段的绘制问题，具体原理详见project文档
 	cxt.translate(0.5, 0.5);
+	drawCircle();
+	fillPolygon(cxt, polygon[0]);
 	// for (y = 0; y < 255; y++) {
 	// for (x = 0; x < 255; x += 1) {
 	// color = [ y % 255, x % 255, 0 ];// 这里根据坐标计算颜色，因为颜色分量必须在0~255之间，所以这里用了取余运算
