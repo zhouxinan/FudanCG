@@ -1,11 +1,12 @@
-//该函数在一个canvas上绘制一条从(x1,y)到(x2,y)的线段。
-//其中cxt是从canvas中获得的一个2d上下文context
-//    color是表示颜色的整形数组，形如[r,g,b]
-//    color在这里会转化为表示颜色的字符串，其内容也可以是：
-//        直接用颜色名称:   "red" "green" "blue"
-//        十六进制颜色值:   "#EEEEFF"
-//        rgb分量表示形式:  "rgb(0-255,0-255,0-255)"
-//        rgba分量表示形式:  "rgba(0-255,0-255,0-255,透明度)"
+// 该函数在一个canvas上绘制一条从(x1,y)到(x2,y)的线段。
+// 其中cxt是从canvas中获得的一个2d上下文context
+// color是表示颜色的整形数组，形如[r,g,b]
+// color在这里会转化为表示颜色的字符串，其内容也可以是：
+// 直接用颜色名称:   "red" "green" "blue"
+// 十六进制颜色值:   "#EEEEFF"
+// rgb分量表示形式:  "rgb(0-255,0-255,0-255)"
+// rgba分量表示形式:  "rgba(0-255,0-255,0-255,透明度)"
+// Since this function is only used to draw horizontal scan lines, only one y position is necessary, which can improve performance. 
 function drawLine(cxt, x1, x2, y, color) {
 	// 建立一条新的路径
 	cxt.beginPath();
@@ -22,7 +23,7 @@ function drawLine(cxt, x1, x2, y, color) {
 }
 
 // This function is to draw all vertex circles. The radius of the circles is
-// read from circleRadius, which is defined in the window.onload function.
+// circleRadius, which is defined in the window.onload function.
 function drawCircle() {
 	for (var i = 0; i < vertex_pos.length; i++) {
 		cxt.beginPath();
@@ -55,8 +56,8 @@ function fillPolygon(cxt, polygon) {
 		if (vertex[i][1] < minY) {
 			minY = vertex[i][1];
 			continue; // This is an performance optimization. If vertex[i][1]
-						// is less than minY, it could never be larger than
-						// maxY.
+			// is less than minY, it could not be larger than
+			// maxY.
 		}
 		if (vertex[i][1] > maxY) {
 			maxY = vertex[i][1];
@@ -72,12 +73,12 @@ function fillPolygon(cxt, polygon) {
 		activeEdgeTable[i] = [];
 	}
 
-	// For every edge of the polygon, if the two vertexes' y position are the
+	// For every edge of the polygon, if the two vertexes' y positions are the
 	// same, dx can not be computed.
-	// So dx can only be computed when the two vertexes' y position are not the
-	// same.
-	// The newEdgeTable stores x, dx and maxY for the scan line whose y position
-	// is the less of the two vertexes.
+	// So dx can only be computed when the two vertexes' y positions are
+	// different.
+	// The newEdgeTable stores {x, dx, maxY} for the scan line whose y position
+	// is the less one of the two vertexes.
 	// Then, by using newEdgeTable, we can construct activeEdgeTable using x, dx
 	// and maxY.
 	for (var i = 0; i < polygon.length; i++) {
@@ -104,7 +105,8 @@ function fillPolygon(cxt, polygon) {
 	// Construct activeEdgeTable using newEdgeTable.
 	for (var i = 0; i < scanLineCount; i++) {
 		for (var j = 0; j < newEdgeTable[i].length; j++) {
-			// For the current scan line, if it has an entry in newEdgeTable, it
+			// For the current scan line, if it has at least an entry in
+			// newEdgeTable, it
 			// can be used to construct activeEdgeTable.
 			var xPositionOfIntersection = newEdgeTable[i][j].x;
 			// Let k be the index of the current scan line, add dx to
@@ -127,15 +129,16 @@ function fillPolygon(cxt, polygon) {
 	}
 }
 
+// This function is used in fillPolygon to sort xPositionOfIntersection.
 function sortNumber(a, b) {
 	return a - b;
 }
 
-// This function is to reDraw the canvas.
-function reDraw(cxt) {
+// This function is to redraw the canvas.
+function redraw(cxt) {
 	// Clear the canvas.
 	cxt.clearRect(0, 0, canvas.width, canvas.height);
-	// Draw every polygon.
+	// Draw each polygon.
 	for (var i = 0; i < polygon.length; i++) {
 		fillPolygon(cxt, polygon[i]);
 	}
@@ -144,7 +147,8 @@ function reDraw(cxt) {
 }
 
 // This function is invoked on mouse down.
-// When the mouse's x and y position is within the radius of any vertex, set the
+// When the mouse's x and y position are within the radius of any vertex, set
+// the
 // vertex as the active vertex so that it's position can be changed.
 function onMouseDown() {
 	for (var i = 0; i < vertex_pos.length; i++) {
@@ -177,12 +181,13 @@ function onMouseMove(e) {
 	if (activeVertex != -1) {
 		vertex_pos[activeVertex][0] = mouseX;
 		vertex_pos[activeVertex][1] = mouseY;
-		reDraw(cxt);
+		redraw(cxt);
 	}
 }
 
 window.onload = function() {
 	canvas = document.getElementById("myCanvas");
+	// Set the size of the canvas.
 	canvas.width = canvasSize.maxX;
 	canvas.height = canvasSize.maxY;
 	cxt = canvas.getContext("2d");
@@ -193,5 +198,5 @@ window.onload = function() {
 	canvas.addEventListener("mousedown", onMouseDown);
 	canvas.addEventListener("mouseup", onMouseUp);
 	canvas.addEventListener("mousemove", onMouseMove);
-	reDraw(cxt);
+	redraw(cxt);
 }
