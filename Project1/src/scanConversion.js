@@ -21,7 +21,8 @@ function drawLine(cxt, x1, x2, y, color) {
 	cxt.stroke();
 }
 
-// This function is to draw all vertex circles. The radius of the circles is read from circleRadius, which is defined in the window.onload function.
+// This function is to draw all vertex circles. The radius of the circles is
+// read from circleRadius, which is defined in the window.onload function.
 function drawCircle() {
 	for (var i = 0; i < vertex_pos.length; i++) {
 		cxt.beginPath();
@@ -53,13 +54,16 @@ function fillPolygon(cxt, polygon) {
 	for (var i = 1; i < polygon.length; i++) {
 		if (vertex[i][1] < minY) {
 			minY = vertex[i][1];
-			continue; // This is an optimization. If vertex[i][1] is less than minY, it could never be larger than maxY.
+			continue; // This is an performance optimization. If vertex[i][1]
+						// is less than minY, it could never be larger than
+						// maxY.
 		}
 		if (vertex[i][1] > maxY) {
 			maxY = vertex[i][1];
 		}
 	}
-	// Construct activeEdgeTable and newEdgeTable. There are only (maxY - minY + 1) scan lines for the polygon.
+	// Construct activeEdgeTable and newEdgeTable. There are only (maxY - minY +
+	// 1) scan lines for the polygon.
 	var scanLineCount = maxY - minY + 1;
 	var activeEdgeTable = new Array(scanLineCount);
 	var newEdgeTable = new Array(scanLineCount);
@@ -67,43 +71,58 @@ function fillPolygon(cxt, polygon) {
 		newEdgeTable[i] = [];
 		activeEdgeTable[i] = [];
 	}
-	
+
+	// For every edge of the polygon, if the two vertexes' y position are the
+	// same, dx can not be computed.
+	// So dx can only be computed when the two vertexes' y position are not the
+	// same.
+	// The newEdgeTable stores x, dx and maxY for the scan line whose y position
+	// is the less of the two vertexes.
+	// Then, by using newEdgeTable, we can construct activeEdgeTable using x, dx
+	// and maxY.
 	for (var i = 0; i < polygon.length; i++) {
 		var p1y = vertex[i][1];
 		var p2y = vertex[(i + 1) % polygon.length][1];
 		if (p1y < p2y) {
 			var p1x = vertex[i][0];
 			var p2x = vertex[(i + 1) % polygon.length][0];
-			newEdgeTable[p1y - minY]
-					.push({
-						x : p1x,
-						dx : ((p2x - p1x) / (p2y - p1y)),
-						maxY : p2y
-					});
+			newEdgeTable[p1y - minY].push({
+				x : p1x,
+				dx : ((p2x - p1x) / (p2y - p1y)),
+				maxY : p2y
+			});
 		} else if (p1y > p2y) {
 			var p1x = vertex[i][0];
 			var p2x = vertex[(i + 1) % polygon.length][0];
-			newEdgeTable[p2y - minY]
-					.push({
-						x : p2x,
-						dx : ((p2x - p1x) / (p2y - p1y)),
-						maxY : p1y
-					});
+			newEdgeTable[p2y - minY].push({
+				x : p2x,
+				dx : ((p2x - p1x) / (p2y - p1y)),
+				maxY : p1y
+			});
 		}
 	}
+	// Construct activeEdgeTable using newEdgeTable.
 	for (var i = 0; i < scanLineCount; i++) {
 		for (var j = 0; j < newEdgeTable[i].length; j++) {
+			// For the current scan line, if it has an entry in newEdgeTable, it
+			// can be used to construct activeEdgeTable.
 			var xPositionOfIntersection = newEdgeTable[i][j].x;
+			// Let k be the index of the current scan line, add dx to
+			// xPositionOfIntersection and get the xPositionOfIntersection of
+			// the next scan line.
 			for (var k = i; k < newEdgeTable[i][j].maxY - minY; k++) {
 				activeEdgeTable[k].push(Math.round(xPositionOfIntersection));
 				xPositionOfIntersection += newEdgeTable[i][j].dx;
 			}
 		}
 	}
+	// Sort xPositionOfIntersection of each scan line and fill the polygon
+	// pairwise.
 	for (var i = 0; i < scanLineCount; i++) {
 		activeEdgeTable[i].sort(sortNumber);
 		for (var j = 0; j < activeEdgeTable[i].length; j += 2) {
-			drawLine(cxt, activeEdgeTable[i][j], activeEdgeTable[i][j + 1], i + minY, color);
+			drawLine(cxt, activeEdgeTable[i][j], activeEdgeTable[i][j + 1], i
+					+ minY, color);
 		}
 	}
 }
@@ -112,14 +131,21 @@ function sortNumber(a, b) {
 	return a - b;
 }
 
+// This function is to reDraw the canvas.
 function reDraw(cxt) {
+	// Clear the canvas.
 	cxt.clearRect(0, 0, canvas.width, canvas.height);
+	// Draw every polygon.
 	for (var i = 0; i < polygon.length; i++) {
 		fillPolygon(cxt, polygon[i]);
 	}
+	// Draw the vertex circles.
 	drawCircle();
 }
 
+// This function is invoked on mouse down.
+// When the mouse's x and y position is within the radius of any vertex, set the
+// vertex as the active vertex so that it's position can be changed.
 function onMouseDown() {
 	for (var i = 0; i < vertex_pos.length; i++) {
 		if (Math.abs(mouseX - vertex_pos[i][0]) < circleRadius
@@ -130,11 +156,16 @@ function onMouseDown() {
 	}
 }
 
+// This function is invoked on mouse up.
+// It resets activeVertex to -1.
 function onMouseUp() {
 	activeVertex = -1;
 }
 
+// This function is invoked on mouse move.
 function onMouseMove(e) {
+	// This if-clause is used to get the mouse position on the canvas,
+	// supporting all kinds of browsers.
 	if (e.offsetX) {
 		mouseX = e.offsetX;
 		mouseY = e.offsetY;
@@ -142,6 +173,7 @@ function onMouseMove(e) {
 		mouseX = e.layerX;
 		mouseY = e.layerY;
 	}
+	// Set the active vertex's position and redraw the canvas.
 	if (activeVertex != -1) {
 		vertex_pos[activeVertex][0] = mouseX;
 		vertex_pos[activeVertex][1] = mouseY;
