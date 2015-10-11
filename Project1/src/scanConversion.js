@@ -85,6 +85,9 @@ function fillPolygon(cxt, polygon) {
 		var p1y = vertex[i][1];
 		var p2y = vertex[(i + 1) % polygon.length][1];
 		if (p1y < p2y) {
+			// Calculating p1x and p2x only when necessary can improve
+			// performance. So I put these two lines inside the if-clause rather
+			// than outside the if-clause.
 			var p1x = vertex[i][0];
 			var p2x = vertex[(i + 1) % polygon.length][0];
 			newEdgeTable[p1y - minY].push({
