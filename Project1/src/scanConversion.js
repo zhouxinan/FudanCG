@@ -141,20 +141,26 @@ function sortNumber(a, b) {
 function redraw(cxt) {
 	// Clear the canvas.
 	cxt.clearRect(0, 0, canvas.width, canvas.height);
-	// Draw each polygon.
-	for (var i = 0; i < polygon.length; i++) {
-		fillPolygon(cxt, polygon[i]);
-	}
+	var polygonToDraw = polygon;
 	// The polygons, which activeVertex belongs to, in the polygon array will be
 	// drawn on top of other polygons. What's more, if the polygons which
 	// activeVertex belongs to are in p1, p2, p3 order in the array, then p3
 	// will be drawn above p1 and p2, and p2 will be above p1.
 	if (activeVertex != -1) {
-		for (var i = polygon.length - 1; i >= 0; i--) {
+		var activePolygon = [];
+		var inactivePolygon = [];
+		for (var i = 0; i < polygon.length; i++) {
 			if (polygon[i].indexOf(activeVertex) > -1) {
-				fillPolygon(cxt, polygon[i]);
+				activePolygon.push(polygon[i]);
+			} else {
+				inactivePolygon.push(polygon[i]);
 			}
 		}
+		polygonToDraw = inactivePolygon.concat(activePolygon);
+	}
+	// Draw each polygon.
+	for (var i = 0; i < polygonToDraw.length; i++) {
+		fillPolygon(cxt, polygonToDraw[i]);
 	}
 	// Draw the vertex circles.
 	drawCircle();
