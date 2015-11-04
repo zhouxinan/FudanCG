@@ -1,14 +1,19 @@
 // Vertex shader program
 var VSHADER_SOURCE =
   'attribute vec4 a_Position;\n' +
+  'attribute vec4 a_Color;\n' +
+  'varying vec4 v_Color;\n' +
   'void main() {\n' +
   '  gl_Position = a_Position;\n' +
+  '  v_Color = a_Color;\n' +
   '}\n';
 
 // Fragment shader program
 var FSHADER_SOURCE =
+  'precision mediump float;\n' +
+  'varying vec4 v_Color;\n' +
   'void main() {\n' +
-  '  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n' +
+  '  gl_FragColor = v_Color;\n' +
   '}\n';
 
 function main() {
@@ -98,9 +103,16 @@ function drawPolygon(gl, canvas, polygon) {
   var FSIZE = vertices_info.BYTES_PER_ELEMENT;
   // Assign the buffer object to a_Position variable
   gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * itemsPerVertex, 0);
-
   // Enable the assignment to a_Position variable
   gl.enableVertexAttribArray(a_Position);
+  var a_Color = gl.getAttribLocation(gl.program, 'a_Color');
+  if (a_Color < 0) {
+    console.log('Failed to get the storage location of a_Color');
+    return -1;
+  }
+  gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE * itemsPerVertex, FSIZE * 3);
+  gl.enableVertexAttribArray(a_Color);
+  
   // Draw the rectangle
   gl.drawArrays(gl.TRIANGLE_FAN, 0, n);
 }
