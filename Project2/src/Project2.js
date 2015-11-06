@@ -3,8 +3,9 @@ var VSHADER_SOURCE =
 	'attribute vec4 a_Position;\n' +
 	'attribute vec4 a_Color;\n' +
 	'varying vec4 v_Color;\n' +
+	'uniform mat4 u_ModelMatrix;\n' +
 	'void main() {\n' +
-	'	gl_Position = a_Position;\n' +
+	'	gl_Position = u_ModelMatrix * a_Position;\n' +
 	'	v_Color = a_Color;\n' +
 	'}\n';
 
@@ -31,9 +32,18 @@ function main() {
 	// By default, polygon grids are not shown.
 	showGrid = false;
 	isEditModeOn = true;
+	isShowModeOn = false;
 	circleRadius = 10;
 	activeVertex = -1;
 	activePolygon = -1;
+	// Rotation angle (degrees/second)
+	ANGLE_STEP = 45.0;
+	SCALE_STEP = 0.2;
+
+	// Current rotation angle
+  	currentAngle = 0.0;
+	// Model matrix
+	modelMatrix = new Matrix4();
 
 	// Get the rendering context for WebGL
 	var gl = getWebGLContext(canvas);
@@ -55,6 +65,14 @@ function main() {
 	}
 	// Set the color of the grids to red.
 	gl.uniform4f(u_FragColor, 1.0, 0.0, 0.0, 1.0);
+
+	// Get storage location of u_ModelMatrix
+  	u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+  	if (!u_ModelMatrix) { 
+    	console.log('Failed to get the storage location of u_ModelMatrix');
+    	return;
+  	}
+
 	// Prepare data of the vertices before drawing polygons.
 	var n = prepareData(canvas);
 	if (n < 0) {
@@ -74,7 +92,7 @@ function main() {
         y = e.clientY - rect.top;
         activeVertex = getVertexByMouseCoordinate(x, y);
         if (activeVertex >= 0) {
-        	activePolygon = getActivePolygonByVertexIndex(activeVertex);
+        	activePolygon = getActivePolygonByActiveVertex();
         }
     }
 
@@ -111,6 +129,14 @@ function main() {
 			break;
 		}
 	}
+
+	// Start drawing
+	var tick = function() {
+    	currentAngle = animate(currentAngle);  // Update the rotation angle
+    	drawPolygons(gl, canvas);   // Draw the triangle
+    	requestAnimationFrame(tick, canvas); // Request that the browser ?calls tick
+  	}
+  	tick();
 }
 
 // Set the positions and colors of the vertices
@@ -135,6 +161,11 @@ function prepareData(canvas) {
 }
 
 function drawPolygons(gl, canvas) {
+	// Set the rotation matrix
+	modelMatrix.setRotate(currentAngle, 0, 0, 1);
+	// Pass the rotation matrix to the vertex shader
+	gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
+
 	// Clear <canvas>
 	gl.clear(gl.COLOR_BUFFER_BIT);
 	// Draw all polygons.
@@ -231,7 +262,7 @@ function drawGrid(gl, canvas, polygonVerticesColors) {
 	// Enable the assignment to a_Position variable
 	gl.enableVertexAttribArray(a_Position);
 
-	// Draw the grid.
+	// Draw the border of the polygon.
 	gl.drawArrays(gl.LINE_LOOP, 0, 4);
 
 	// Assign the buffer object to a_Position variable
@@ -239,7 +270,7 @@ function drawGrid(gl, canvas, polygonVerticesColors) {
 	// Enable the assignment to a_Position variable
 	gl.enableVertexAttribArray(a_Position);
 
-	// Draw the grid.
+	// Draw the diagonal line of the polygon.
 	gl.drawArrays(gl.LINES, 0, 2);
 }
 
@@ -253,11 +284,23 @@ function getVertexByMouseCoordinate(x, y) {
 	return -1;
 }
 
-function getActivePolygonByVertexIndex(activeVertex) {
+function getActivePolygonByActiveVertex() {
 	for (var i = 0; i < polygon.length; i++) {
 		if (polygon[i].indexOf(activeVertex) > -1) {
 			return i;
 		}
 	}
 	return -1;
+}
+
+// Last time that this function was called
+var g_last = Date.now();
+function animate(angle) {
+  // Calculate the elapsed time
+  var now = Date.now();
+  var elapsed = now - g_last;
+  g_last = now;
+  // Update the current rotation angle (adjusted by the elapsed time)
+  var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+  return newAngle %= 360;
 }
