@@ -14,9 +14,9 @@ var FSHADER_SOURCE =
 	'precision mediump float;\n' +
 	'varying vec4 v_Color;\n' +
 	'uniform vec4 u_FragColor;\n' +
-	'uniform bool u_DrawGrid;\n' +
+	'uniform bool u_isToDrawGrid;\n' +
 	'void main() {\n' +
-	'	if (u_DrawGrid)\n' +
+	'	if (u_isToDrawGrid)\n' +
 	'		gl_FragColor = u_FragColor;\n' +
 	'	else\n' +
 	'		gl_FragColor = v_Color;\n' +
@@ -29,19 +29,28 @@ function main() {
 	canvas.width = canvasSize.maxX;
 	canvas.height = canvasSize.maxY;
 
-	// By default, polygon grids are not shown.
-	showGrid = false;
+	// By default, polygon grids are not visible.
+	isGridVisible = false;
+	// By default, edit mode is on.
 	isEditModeOn = true;
+	// By default, show mode is off.
 	isShowModeOn = false;
-	circleRadius = 10;
+	// By default, the polygons are to grow smaller.
+	isPolygonToGrowLarger = false;
+	// When the mouse is pressed within a vertex's radius, the vertex is the active vertex. 
+	RADIUS = 10;
+	// The index of the active vertex.
 	activeVertex = -1;
+	// The index of the active polygon.
 	activePolygon = -1;
 	// Rotation angle (degrees/second)
 	ANGLE_STEP = 45.0;
+	// Scale step per second.
 	SCALE_STEP = 0.2;
-
 	// Current rotation angle
-  	currentAngle = 0.0;
+	currentAngle = 0.0;
+	// Current scale
+	currentScale = 1.0;
 	// Model matrix
 	modelMatrix = new Matrix4();
 
@@ -58,6 +67,7 @@ function main() {
 		return;
 	}
 
+	// Get storage location of u_FragColor
 	var u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
 	if (u_FragColor < 0) {
 		console.log('Failed to get the storage location of u_FragColor');
@@ -67,16 +77,16 @@ function main() {
 	gl.uniform4f(u_FragColor, 1.0, 0.0, 0.0, 1.0);
 
 	// Get storage location of u_ModelMatrix
-  	u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
-  	if (!u_ModelMatrix) { 
-    	console.log('Failed to get the storage location of u_ModelMatrix');
-    	return;
-  	}
+	u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+	if (!u_ModelMatrix) {
+		console.log('Failed to get the storage location of u_ModelMatrix');
+		return;
+	}
 
-	// Prepare data of the vertices before drawing polygons.
+	// Prepare the vertices' data before drawing polygons.
 	var n = prepareData(canvas);
-	if (n < 0) {
-		console.log('Failed to prepare data of the vertices');
+	if (n <= 0) {
+		console.log('Failed to prepare the vertices\' data');
 		return;
 	}
 
@@ -86,35 +96,43 @@ function main() {
 	// Draw the polygons.
 	drawPolygons(gl, canvas);
 
+	var tick = function() {
+		if (isShowModeOn) {
+			animate(currentAngle); // Update the rotation angle and the scale
+			drawPolygons(gl, canvas); // Draw the polygons
+			requestAnimationFrame(tick, canvas); // Request that the browser calls tick
+		}
+	}
+
 	canvas.onmousedown = function(e) {
-        var rect = e.target.getBoundingClientRect();
-        x = e.clientX - rect.left;
-        y = e.clientY - rect.top;
-        activeVertex = getVertexByMouseCoordinate(x, y);
-        if (activeVertex >= 0) {
-        	activePolygon = getActivePolygonByActiveVertex();
-        }
-    }
+		var rect = e.target.getBoundingClientRect();
+		x = e.clientX - rect.left;
+		y = e.clientY - rect.top;
+		activeVertex = getVertexByMouseCoordinate(x, y);
+		if (activeVertex >= 0) {
+			activePolygon = getActivePolygonByActiveVertex();
+		}
+	}
 
-    canvas.onmouseup = function() {
-        activeVertex = -1;
-        activePolygon = -1;
-    }
+	canvas.onmouseup = function() {
+		activeVertex = -1;
+		activePolygon = -1;
+	}
 
-    canvas.onmousemove = function(e) {
-        if((activeVertex >= 0) && isEditModeOn) {
-            var rect = e.target.getBoundingClientRect();
-        	x = e.clientX - rect.left;
-        	y = e.clientY - rect.top;
-        	vertex_pos[activeVertex][0] = x;
-        	vertex_pos[activeVertex][1] = y;
-        	x = (x - canvas.width / 2)/ (canvas.width / 2);
-			y = (canvas.height / 2 - y)/ (canvas.height / 2);
-            verticesColors[activeVertex * itemsPerVertex] = x;
-            verticesColors[activeVertex * itemsPerVertex + 1] = y;
-            drawPolygons(gl, canvas);
-        }
-    }
+	canvas.onmousemove = function(e) {
+		if ((activeVertex >= 0) && isEditModeOn) {
+			var rect = e.target.getBoundingClientRect();
+			x = e.clientX - rect.left;
+			y = e.clientY - rect.top;
+			vertex_pos[activeVertex][0] = x;
+			vertex_pos[activeVertex][1] = y;
+			x = (x - canvas.width / 2) / (canvas.width / 2);
+			y = (canvas.height / 2 - y) / (canvas.height / 2);
+			verticesColors[activeVertex * itemsPerVertex] = x;
+			verticesColors[activeVertex * itemsPerVertex + 1] = y;
+			drawPolygons(gl, canvas);
+		}
+	}
 
 	// Set key press handler for the <body> element.
 	document.body.onkeypress = function(e) {
@@ -124,22 +142,29 @@ function main() {
 		switch (keyChar) {
 		case 'b':
 		case 'B':
-			showGrid = !showGrid;
+			isGridVisible = !isGridVisible;
+			drawPolygons(gl, canvas);
+			break;
+		case 't':
+		case 'T':
+			isShowModeOn = !isShowModeOn;
+			isEditModeOn = false;
+			if (isShowModeOn) {
+				g_last = Date.now();
+				tick();
+			}
+			break;
+		case 'e':
+		case 'E':
+			isShowModeOn = false;
+			isEditModeOn = true;
 			drawPolygons(gl, canvas);
 			break;
 		}
 	}
-
-	// Start drawing
-	var tick = function() {
-    	currentAngle = animate(currentAngle);  // Update the rotation angle
-    	drawPolygons(gl, canvas);   // Draw the triangle
-    	requestAnimationFrame(tick, canvas); // Request that the browser ?calls tick
-  	}
-  	tick();
 }
 
-// Set the positions and colors of the vertices
+// Load the positions and colors of the vertices into verticesColors global array.
 function prepareData(canvas) {
 	var n = vertex_pos.length; // The number of vertices
 	itemsPerVertex = 6;
@@ -162,7 +187,12 @@ function prepareData(canvas) {
 
 function drawPolygons(gl, canvas) {
 	// Set the rotation matrix
-	modelMatrix.setRotate(currentAngle, 0, 0, 1);
+	if (isEditModeOn) {
+		modelMatrix.setIdentity();
+	} else {
+		modelMatrix.setRotate(currentAngle, 0, 0, 1);
+		modelMatrix.scale(currentScale, currentScale, currentScale);
+	}
 	// Pass the rotation matrix to the vertex shader
 	gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
 
@@ -204,12 +234,12 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 		console.log('Failed to get the storage location of a_Position');
 		return;
 	}
-	var u_DrawGrid = gl.getUniformLocation(gl.program, 'u_DrawGrid');
-	if (u_DrawGrid < 0) {
-		console.log('Failed to get the storage location of u_DrawGrid');
+	var u_isToDrawGrid = gl.getUniformLocation(gl.program, 'u_isToDrawGrid');
+	if (u_isToDrawGrid < 0) {
+		console.log('Failed to get the storage location of u_isToDrawGrid');
 		return;
 	}
-	gl.uniform1i(u_DrawGrid, 0); // Pass false to u_DrawGrid.
+	gl.uniform1i(u_isToDrawGrid, 0); // Pass false to u_isToDrawGrid.
 	var FSIZE = polygonVerticesColors.BYTES_PER_ELEMENT;
 	// Assign the buffer object to a_Position variable
 	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE
@@ -227,7 +257,7 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 
 	// Draw the polygon
 	gl.drawArrays(gl.TRIANGLE_FAN, 0, n);
-	if (showGrid) {
+	if (isGridVisible) {
 		drawGrid(gl, canvas, polygonVerticesColors);
 	}
 }
@@ -251,12 +281,12 @@ function drawGrid(gl, canvas, polygonVerticesColors) {
 		console.log('Failed to get the storage location of a_Position');
 		return;
 	}
-	var u_DrawGrid = gl.getUniformLocation(gl.program, 'u_DrawGrid');
-	if (u_DrawGrid < 0) {
-		console.log('Failed to get the storage location of u_DrawGrid');
+	var u_isToDrawGrid = gl.getUniformLocation(gl.program, 'u_isToDrawGrid');
+	if (u_isToDrawGrid < 0) {
+		console.log('Failed to get the storage location of u_isToDrawGrid');
 		return;
 	}
-	gl.uniform1i(u_DrawGrid, 1); // Pass true to u_DrawGrid.
+	gl.uniform1i(u_isToDrawGrid, 1); // Pass true to u_isToDrawGrid.
 	// Assign the buffer object to a_Position variable
 	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0);
 	// Enable the assignment to a_Position variable
@@ -276,8 +306,8 @@ function drawGrid(gl, canvas, polygonVerticesColors) {
 
 function getVertexByMouseCoordinate(x, y) {
 	for (var i = 0; i < vertex_pos.length; i++) {
-		if (Math.abs(x - vertex_pos[i][0]) < circleRadius
-				&& Math.abs(y - vertex_pos[i][1]) < circleRadius) {
+		if (Math.abs(x - vertex_pos[i][0]) < RADIUS
+				&& Math.abs(y - vertex_pos[i][1]) < RADIUS) {
 			return i;
 		}
 	}
@@ -294,13 +324,22 @@ function getActivePolygonByActiveVertex() {
 }
 
 // Last time that this function was called
-var g_last = Date.now();
 function animate(angle) {
-  // Calculate the elapsed time
-  var now = Date.now();
-  var elapsed = now - g_last;
-  g_last = now;
-  // Update the current rotation angle (adjusted by the elapsed time)
-  var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
-  return newAngle %= 360;
+	// Calculate the elapsed time
+	var now = Date.now();
+	var elapsed = now - g_last;
+	g_last = now;
+	// Update the current rotation angle (adjusted by the elapsed time)
+	currentAngle += (ANGLE_STEP * elapsed) / 1000.0;
+	currentAngle %= 360;
+	// Update the current scale (adjusted by the elapsed time)
+	if (isPolygonToGrowLarger) {
+		currentScale += (SCALE_STEP * elapsed) / 1000.0;
+	} else {
+		currentScale -= (SCALE_STEP * elapsed) / 1000.0;
+	}
+	if (currentScale >= 1.0)
+		isPolygonToGrowLarger = false;
+	else if (currentScale <= 0.2)
+		isPolygonToGrowLarger = true;
 }
