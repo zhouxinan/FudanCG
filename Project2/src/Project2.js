@@ -41,8 +41,8 @@ function main() {
 	RADIUS = 10;
 	// The index of the active vertex.
 	activeVertex = -1;
-	// The index of the active polygon.
-	activePolygon = -1;
+	// By default, the index of the active polygon is 0.
+	activePolygon = 0;
 	// Rotation angle (degrees/second)
 	ANGLE_STEP = 45.0;
 	// Scale step per second.
@@ -116,7 +116,6 @@ function main() {
 
 	canvas.onmouseup = function() {
 		activeVertex = -1;
-		activePolygon = -1;
 	}
 
 	canvas.onmousemove = function(e) {
@@ -202,8 +201,11 @@ function drawPolygons(gl, canvas) {
 	for (var i = 0; i < polygon.length; i++) {
 		drawPolygon(gl, canvas, polygon[i]);
 	}
-	if (activeVertex >= 0 && activePolygon >= 0) {
-		drawPolygon(gl, canvas, polygon[activePolygon]);
+	drawPolygon(gl, canvas, polygon[activePolygon]);
+	if (isGridVisible) {
+		for (var i = 0; i < polygon.length; i++) {
+			drawGrid(gl, canvas, polygon[i]);
+		}
 	}
 }
 
@@ -257,12 +259,18 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 
 	// Draw the polygon
 	gl.drawArrays(gl.TRIANGLE_FAN, 0, n);
-	if (isGridVisible) {
-		drawGrid(gl, canvas, polygonVerticesColors);
-	}
 }
 
-function drawGrid(gl, canvas, polygonVerticesColors) {
+function drawGrid(gl, canvas, polygonToDraw) {
+	// n is the number of vertices in the polygon to draw
+	var n = polygonToDraw.length;
+	var polygonVerticesColors = new Float32Array(n * 3);
+	for (var i = 0; i < n; i++) {
+		for (var j = 0; j < 3; j++) {
+			polygonVerticesColors[i * 3 + j] = verticesColors[polygonToDraw[i]
+					* itemsPerVertex + j];
+		}
+	}
 	// Create a buffer object
 	var vertexBuffer = gl.createBuffer();
 	if (!vertexBuffer) {
@@ -288,7 +296,7 @@ function drawGrid(gl, canvas, polygonVerticesColors) {
 	}
 	gl.uniform1i(u_isToDrawGrid, 1); // Pass true to u_isToDrawGrid.
 	// Assign the buffer object to a_Position variable
-	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0);
+	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
 	// Enable the assignment to a_Position variable
 	gl.enableVertexAttribArray(a_Position);
 
@@ -296,7 +304,7 @@ function drawGrid(gl, canvas, polygonVerticesColors) {
 	gl.drawArrays(gl.LINE_LOOP, 0, 4);
 
 	// Assign the buffer object to a_Position variable
-	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 12, 0);
+	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0);
 	// Enable the assignment to a_Position variable
 	gl.enableVertexAttribArray(a_Position);
 
