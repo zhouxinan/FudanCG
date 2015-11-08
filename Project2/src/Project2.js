@@ -64,6 +64,9 @@ function main() {
 	currentScale = 1.0;
 	// Model matrix
 	modelMatrix = new Matrix4();
+	// Texture coordinates for a polygon's four vertices
+	verticesTexCoords = new Float32Array([ 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0,
+			0.0 ]);
 
 	// Get the rendering context for WebGL
 	var gl = getWebGLContext(canvas);
@@ -88,6 +91,7 @@ function main() {
 	gl.uniform4f(u_GridColor, 1.0, 0.0, 0.0, 1.0);
 
 	// Get storage location of u_ModelMatrix
+	// Note that this opearation is done only once so as to improve efficiency.
 	u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
 	if (!u_ModelMatrix) {
 		console.log('Failed to get the storage location of u_ModelMatrix');
@@ -96,6 +100,7 @@ function main() {
 
 	// Prepare the vertices' data before drawing polygons.
 	var n = prepareData(canvas);
+	// If there is no vertex, it should be an error.
 	if (n <= 0) {
 		console.log('Failed to prepare the vertices\' data');
 		return;
@@ -115,20 +120,26 @@ function main() {
 
 	// The animation function used in show mode.
 	var tick = function() {
+		// The animation continues only if show mode is on.
 		if (isShowModeOn) {
-			animate(currentAngle); // Update the rotation angle and the scale
-			draw(gl, canvas); // Draw the shape.
-			requestAnimationFrame(tick, canvas); // Request that the browser
-			// calls tick
+			// Update the rotation angle and the scale
+			animate(currentAngle);
+			// Draw the shape.
+			draw(gl, canvas);
+			// Request that the browser calls tick
+			requestAnimationFrame(tick, canvas);
 		}
 	}
 
 	// Register the event handler to be called on mouse down
 	canvas.onmousedown = function(e) {
+		// Calculate the mouse's coordinate on the canvas.
 		var rect = e.target.getBoundingClientRect();
 		x = e.clientX - rect.left;
 		y = e.clientY - rect.top;
+		// Find the active vertex.
 		activeVertex = getVertexByMouseCoordinate(x, y);
+		// Find the active polygon if the active vertex exists.
 		if (activeVertex >= 0) {
 			activePolygon = getActivePolygonByActiveVertex();
 		}
@@ -136,18 +147,23 @@ function main() {
 
 	// Register the event handler to be called on mouse up
 	canvas.onmouseup = function() {
+		// There should be no active vertex on mouse up.
 		activeVertex = -1;
 	}
 
 	// Register the event handler to be called on mouse move
 	canvas.onmousemove = function(e) {
 		if ((activeVertex >= 0) && isEditModeOn) {
+			// Calculate the mouse's coordinate on the canvas.
 			var rect = e.target.getBoundingClientRect();
 			x = e.clientX - rect.left;
 			y = e.clientY - rect.top;
-			// Update active vertex's coordinate
+			// Update the active vertex's coordinate
 			vertex_pos[activeVertex][0] = x;
 			vertex_pos[activeVertex][1] = y;
+			// Map the canvas coordinates to WebGL coordinates and store them in
+			// the
+			// global array.
 			var webglCoordinate = mapCoordinate(canvas, x, y);
 			verticesColors[activeVertex * itemsPerVertex] = webglCoordinate.webglX;
 			verticesColors[activeVertex * itemsPerVertex + 1] = webglCoordinate.webglY;
@@ -169,9 +185,10 @@ function main() {
 			break;
 		// If 't' or 'T' is pressed, stop edit mode.
 		// By default, isShowModeOn is off. So the first time 't' or 'T' is
-		// pressed, tick() will be invoked.
+		// pressed, tick() will be invoked and the animation will start.
 		// The next time 't' or 'T' is pressed, isShowModeOn will be off again.
-		// So tick() will automatically stop, since requestAnimationFrame is not
+		// So tick() will automatically stop, since requestAnimationFrame() is
+		// not
 		// invoked any more.
 		case 't':
 		case 'T':
@@ -203,17 +220,20 @@ function main() {
 // array.
 function prepareData(canvas) {
 	var n = vertex_pos.length; // The number of vertices
+	// For each vertex there are six items: three for coordinates and three for
+	// the color.
 	itemsPerVertex = 6;
-	// Map the canvas coordinates to WebGL coordinates and store them in the
-	// global array.
-	// Transform type of vertices' colors from RGB type to [0,1] type and store
-	// them in the global array.
 	verticesColors = new Float32Array(n * itemsPerVertex);
 	for (var i = 0; i < n; i++) {
+		// Map the canvas coordinates to WebGL coordinates and store them in the
+		// global array.
 		var webglCoordinate = mapCoordinate(canvas, vertex_pos[i][0],
 				vertex_pos[i][1]);
 		verticesColors[i * itemsPerVertex] = webglCoordinate.webglX;
 		verticesColors[i * itemsPerVertex + 1] = webglCoordinate.webglY;
+		// Transform type of vertices' colors from RGB type to [0,1] type and
+		// store
+		// them in the global array.
 		verticesColors[i * itemsPerVertex + 3] = vertex_color[i][0] / 255;
 		verticesColors[i * itemsPerVertex + 4] = vertex_color[i][1] / 255;
 		verticesColors[i * itemsPerVertex + 5] = vertex_color[i][2] / 255;
@@ -267,7 +287,7 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 		}
 	}
 
-	// Set u_isToDrawGrid in the shader to 0;
+	// Set u_isToDrawGrid in the shader to 0
 	setFragmentShaderInfo(gl, false, isToUseTextureImage);
 
 	// Create a buffer object
@@ -296,10 +316,8 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 			* itemsPerVertex, 0);
 	// Enable the assignment to a_Position variable
 	gl.enableVertexAttribArray(a_Position);
+
 	if (isToUseTextureImage) {
-		var verticesTexCoords = new Float32Array([
-		// Texture coordinate
-		0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, ]);
 		// Create a buffer object
 		var texCoordsBuffer = gl.createBuffer();
 		if (!texCoordsBuffer) {
@@ -311,8 +329,10 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 		gl.bindBuffer(gl.ARRAY_BUFFER, texCoordsBuffer);
 		// Write data into the buffer object
 		gl.bufferData(gl.ARRAY_BUFFER, verticesTexCoords, gl.STATIC_DRAW);
-		// Get the storage location of a_TexCoord
+
 		var FSIZE = polygonVerticesColors.BYTES_PER_ELEMENT;
+
+		// Get the storage location of a_TexCoord
 		var a_TexCoord = gl.getAttribLocation(gl.program, 'a_TexCoord');
 		if (a_TexCoord < 0) {
 			console.log('Failed to get the storage location of a_TexCoord');
@@ -320,8 +340,8 @@ function drawPolygon(gl, canvas, polygonToDraw) {
 		}
 		// Assign the buffer object to a_TexCoord variable
 		gl.vertexAttribPointer(a_TexCoord, 2, gl.FLOAT, false, FSIZE * 2, 0);
-		gl.enableVertexAttribArray(a_TexCoord); // Enable the assignment of the buffer object
-
+		// Enable the assignment of the buffer object
+		gl.enableVertexAttribArray(a_TexCoord);
 	} else {
 		// Get storage location of a_Color
 		var a_Color = gl.getAttribLocation(gl.program, 'a_Color');
@@ -353,7 +373,7 @@ function drawGrid(gl, canvas, polygonToDraw) {
 		}
 	}
 
-	// Set u_isToDrawGrid in the shader to 1;
+	// Set u_isToDrawGrid in the shader to 1
 	setFragmentShaderInfo(gl, true, isToUseTextureImage);
 
 	// Create a buffer object
@@ -454,6 +474,8 @@ function mapCoordinate(canvas, canvasX, canvasY) {
 	};
 }
 
+// This function is to set u_isToDrawGrid and u_isToUseTextureImage in the
+// fragment shader.
 function setFragmentShaderInfo(gl, isToDrawGrid, isToUseTextureImage) {
 	// Get storage location of u_isToDrawGrid
 	var u_isToDrawGrid = gl.getUniformLocation(gl.program, 'u_isToDrawGrid');
@@ -484,8 +506,10 @@ function setFragmentShaderInfo(gl, isToDrawGrid, isToUseTextureImage) {
 
 }
 
+// This function is to initialize texture image.
 function initTextures(gl, n) {
-	var texture = gl.createTexture(); // Create a texture object
+	// Create a texture object
+	var texture = gl.createTexture();
 	if (!texture) {
 		console.log('Failed to create the texture object');
 		return false;
@@ -497,7 +521,8 @@ function initTextures(gl, n) {
 		console.log('Failed to get the storage location of u_Sampler');
 		return false;
 	}
-	var image = new Image(); // Create the image object
+	// Create the image object
+	var image = new Image();
 	if (!image) {
 		console.log('Failed to create the image object');
 		return false;
@@ -512,8 +537,10 @@ function initTextures(gl, n) {
 	return true;
 }
 
+// This function is to load the texture into the fragment shader.
 function loadTexture(gl, n, texture, u_Sampler, image) {
-	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1); // Flip the image's y axis
+	// Flip the image's y axis
+	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
 	// Enable texture unit0
 	gl.activeTexture(gl.TEXTURE0);
 	// Bind the texture object to the target
