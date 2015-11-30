@@ -1,5 +1,10 @@
-// Vertex shader program
-var VSHADER_SOURCE =
+var textureArticleList = [];
+var boxTexure = {texture: -1, isTextureImageReady: 0};
+var floorTexure = {texture: -1, isTextureImageReady: 0};
+var texureProgram;
+
+// Texture vertex shader program, which is used to draw the big box and the ground.
+var TEXTURE_VSHADER_SOURCE =
 	'attribute vec4 a_Position;\n' +
 	'uniform mat4 u_MvpMatrix;\n' +
 	'attribute vec2 a_TexCoord;\n' +
@@ -9,8 +14,8 @@ var VSHADER_SOURCE =
 	'  v_TexCoord = a_TexCoord;\n' +
 	'}\n';
 
-// Fragment shader program
-var FSHADER_SOURCE =
+// Texture fragment shader program, which is used to draw the big box and the ground.
+var TEXTURE_FSHADER_SOURCE =
 	'precision mediump float;\n' +
 	'uniform sampler2D u_Sampler;\n' +
 	'varying vec2 v_TexCoord;\n' +
@@ -30,128 +35,99 @@ function main() {
 	}
 
 	// Initialize shaders
-	if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+	texureProgram = createProgram(gl, TEXTURE_VSHADER_SOURCE,
+			TEXTURE_FSHADER_SOURCE);
+	// if (!solidProgram || !texureProgram) {
+	if (!texureProgram) {
 		console.log('Failed to intialize shaders.');
 		return;
 	}
 
-	// Set the vertex information
-	var n = initVertexBuffers(gl);
-	if (n < 0) {
-		console.log('Failed to set the vertex information');
+	// Get storage locations of attribute and uniform variables in program
+	// object for texture drawing
+	texureProgram.a_Position = gl
+			.getAttribLocation(texureProgram, 'a_Position');
+	texureProgram.u_MvpMatrix = gl.getUniformLocation(texureProgram,
+			'u_MvpMatrix');
+	texureProgram.a_TexCoord = gl
+			.getAttribLocation(texureProgram, 'a_TexCoord');
+	texureProgram.u_Sampler = gl.getUniformLocation(texureProgram, 'u_Sampler');
+
+	if (texureProgram.a_Position < 0 || texureProgram.a_TexCoord < 0
+			|| !texureProgram.u_MvpMatrix || !texureProgram.u_Sampler) {
+		console
+				.log('Failed to get the storage location of attribute or uniform variable');
 		return;
 	}
 
-	// Get the storage location of u_MvpMatrix
-	var u_MvpMatrix = gl.getUniformLocation(gl.program, 'u_MvpMatrix');
-	if (!u_MvpMatrix) {
-		console.log('Failed to get the storage location of u_MvpMatrix');
+	// Set texture
+	if (!initTextures(gl, boxTexure, boxRes.texImagePath, texureProgram)) {
+		console.log('Failed to intialize the box texture.');
 		return;
 	}
+	if (!initTextures(gl, floorTexure, floorRes.texImagePath, texureProgram)) {
+		console.log('Failed to intialize the floor texture.');
+		return;
+	}
+
+	var obj = initVertexBuffersForTexObj(gl, boxRes);
+	obj.texObj = boxTexure;
+	obj.translate = boxRes.translate;
+	obj.scale = boxRes.scale;
+	textureArticleList.push(obj);
+
+	obj = initVertexBuffersForTexObj(gl, floorRes);
+	obj.texObj = floorTexure;
+	obj.translate = floorRes.translate;
+	obj.scale = floorRes.scale;
+	textureArticleList.push(obj);
 
 	// Model matrix
-	var modelMatrix = new Matrix4();
+	modelMatrix = new Matrix4();
 	// View matrix
-	var viewMatrix = new Matrix4();
+	viewMatrix = new Matrix4();
 	// Projection matrix
-	var projMatrix = new Matrix4();
+	projMatrix = new Matrix4();
 	// Model view projection matrix
-	var mvpMatrix = new Matrix4();
+	mvpMatrix = new Matrix4();
 
 	// Calculate the view matrix and the projection matrix
-	modelMatrix.setTranslate(boxRes.translate[0], boxRes.translate[1],
-			boxRes.translate[2]);
-	modelMatrix.scale(boxRes.scale[0], boxRes.scale[1], boxRes.scale[2]);
 	viewMatrix.setLookAt(CameraPara.eye[0], CameraPara.eye[1],
 			CameraPara.eye[2], CameraPara.at[0], CameraPara.at[1],
 			CameraPara.at[2], CameraPara.up[0], CameraPara.up[1],
 			CameraPara.up[2]);
 	projMatrix.setPerspective(CameraPara.fov, canvas.width / canvas.height,
 			CameraPara.near, CameraPara.far);
-	// Calculate the model view projection matrix
-	mvpMatrix.set(projMatrix).multiply(viewMatrix).multiply(modelMatrix);
-	// Pass the model view projection matrix
-	gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
-
-	
-
-	// Set texture
-	if (!initTextures(gl, n)) {
-		console.log('Failed to intialize the texture.');
-		return;
-	}
+	var tick = function() {
+		drawEverything(gl);
+		anime = requestAnimationFrame(tick, canvas);
+	};
+	tick();
 }
 
-function initVertexBuffers(gl) {
-	var verticesCoords = new Float32Array(boxRes.vertex);
-	var texCoords = new Float32Array(boxRes.texCoord);
+function initVertexBuffersForTexObj(gl, res) {
+	var verticesCoords = new Float32Array(res.vertex);
+	var texCoords = new Float32Array(res.texCoord);
 	// Indices of the vertices
-	var indices = new Uint8Array(boxRes.index);
-	var n = 4; // The number of vertices
+	var indices = new Uint8Array(res.index);
 
-	// Create the buffer object
-	var vertexCoordBuffer = gl.createBuffer();
-	var texCoordBuffer = gl.createBuffer();
-	var indexBuffer = gl.createBuffer();
-	if (!vertexCoordBuffer) {
-		console.log('Failed to create vertexCoordBuffer');
-		return -1;
-	}
-	if (!texCoordBuffer) {
-		console.log('Failed to create texCoordBuffer');
-		return -1;
-	}
-	if (!indexBuffer) {
-		console.log('Failed to create indexBuffer');
-		return -1;
-	}
-
-	// Bind the buffer object to target
-	gl.bindBuffer(gl.ARRAY_BUFFER, vertexCoordBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, verticesCoords, gl.STATIC_DRAW);
-
-	var FSIZE = verticesCoords.BYTES_PER_ELEMENT;
-	// Get the storage location of a_Position, assign and enable buffer
-	var a_Position = gl.getAttribLocation(gl.program, 'a_Position');
-	if (a_Position < 0) {
-		console.log('Failed to get the storage location of a_Position');
-		return -1;
-	}
-	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
-	gl.enableVertexAttribArray(a_Position); // Enable the assignment of the
-	// buffer object
-
-	// Bind the buffer object to target
-	gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
-	// Get the storage location of a_TexCoord
-	var a_TexCoord = gl.getAttribLocation(gl.program, 'a_TexCoord');
-	if (a_TexCoord < 0) {
-		console.log('Failed to get the storage location of a_TexCoord');
-		return -1;
-	}
-	// Assign the buffer object to a_TexCoord variable
-	gl.vertexAttribPointer(a_TexCoord, 2, gl.FLOAT, false, FSIZE * 2, 0);
-	gl.enableVertexAttribArray(a_TexCoord); // Enable the assignment of the
-	// buffer object
-
-	// Write the indices to the buffer object
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-	return indices.length;
+	var o = new Object();
+	o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+	o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+	o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices,
+			gl.UNSIGNED_BYTE);
+	// The number of vertices
+	o.numIndices = indices.length;
+	if (!o.vertexBuffer || !o.texCoordBuffer || !o.indexBuffer)
+		return null;
+	return o;
 }
 
-function initTextures(gl, n) {
-	var texture = gl.createTexture(); // Create a texture object
-	if (!texture) {
+function initTextures(gl, tex, imagePath, program) {
+	// Create a texture object
+	tex.texture = gl.createTexture();
+	if (!tex.texture) {
 		console.log('Failed to create the texture object');
-		return false;
-	}
-
-	// Get the storage location of u_Sampler
-	var u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler');
-	if (!u_Sampler) {
-		console.log('Failed to get the storage location of u_Sampler');
 		return false;
 	}
 	var image = new Image(); // Create the image object
@@ -161,36 +137,97 @@ function initTextures(gl, n) {
 	}
 	// Register the event handler to be called on loading an image
 	image.onload = function() {
-		loadTexture(gl, n, texture, u_Sampler, image);
+		loadTexture(gl, tex, program.u_Sampler, image);
 	};
 	// Tell the browser to load an image
-	image.src = 'image/boxface.bmp';
-
+	image.src = imagePath;
 	return true;
 }
 
-function loadTexture(gl, n, texture, u_Sampler, image) {
-	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1); // Flip the image's y axis
+function loadTexture(gl, tex, u_Sampler, image) {
+	// Flip the image's y axis
+	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
 	// Enable texture unit0
 	gl.activeTexture(gl.TEXTURE0);
 	// Bind the texture object to the target
-	gl.bindTexture(gl.TEXTURE_2D, texture);
-
+	gl.bindTexture(gl.TEXTURE_2D, tex.texture);
 	// Set the texture parameters
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	// Set the texture image
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
-
 	// Set the texture unit 0 to the sampler
 	gl.uniform1i(u_Sampler, 0);
 
+	tex.isTextureImageReady = 1;
+}
+
+function drawEverything(gl) {
+	gl.useProgram(texureProgram);
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.enable(gl.DEPTH_TEST);
-
 	// Clear color and depth buffer
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-	
-	// Draw the cube
-	gl.drawElements(gl.TRIANGLES, n, gl.UNSIGNED_BYTE, 0);
+
+	for (var i = 0; i < textureArticleList.length; i++) {
+		var textureArticle = textureArticleList[i];
+		modelMatrix.setTranslate(textureArticle.translate[0], textureArticle.translate[1],
+				textureArticle.translate[2]);
+		modelMatrix.scale(textureArticle.scale[0], textureArticle.scale[1], textureArticle.scale[2]);
+		// Calculate the model view projection matrix
+		mvpMatrix.set(projMatrix).multiply(viewMatrix).multiply(modelMatrix);
+		gl.uniformMatrix4fv(texureProgram.u_MvpMatrix, false,
+				mvpMatrix.elements);
+
+		initAttributeVariable(gl, texureProgram.a_Position, textureArticle.vertexBuffer);
+		initAttributeVariable(gl, texureProgram.a_TexCoord, textureArticle.texCoordBuffer);
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
+		if (textureArticle.texObj.isTextureImageReady) {
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, textureArticle.texObj.texture);
+			gl.uniform1i(texureProgram.u_Sampler, 0);
+			gl.drawElements(gl.TRIANGLES, textureArticle.numIndices,
+					textureArticle.indexBuffer.type, 0);
+		}
+	}
+}
+
+function initArrayBufferForLaterUse(gl, data, num, type) {
+	var buffer = gl.createBuffer(); // Create a buffer object
+	if (!buffer) {
+		console.log('Failed to create the buffer object');
+		return null;
+	}
+	// Write date into the buffer object
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+	// Keep the information necessary to assign to the attribute variable later
+	buffer.num = num;
+	buffer.type = type;
+
+	return buffer;
+}
+
+function initElementArrayBufferForLaterUse(gl, data, type) {
+	// Create a buffer object
+	var buffer = gl.createBuffer();
+	if (!buffer) {
+		console.log('Failed to create the buffer object');
+		return null;
+	}
+	// Write date into the buffer object
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+	buffer.type = type;
+
+	return buffer;
+}
+
+// Assign the buffer objects and enable the assignment
+function initAttributeVariable(gl, a_attribute, buffer) {
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+	gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
+	gl.enableVertexAttribArray(a_attribute);
 }
