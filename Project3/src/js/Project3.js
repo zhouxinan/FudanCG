@@ -2,6 +2,48 @@ var textureArticleList = [];
 var boxTexure = {texture: -1, isTextureImageReady: 0};
 var floorTexure = {texture: -1, isTextureImageReady: 0};
 var texureProgram;
+var currentTime = Date.now();
+var eye = new Vector3(CameraPara.eye);
+var at = new Vector3(CameraPara.at);
+var up = new Vector3(CameraPara.up).normalize();
+var eyeDirection = VectorMinus(at, eye).normalize();
+var rightDirection = VectorCross(eyeDirection, up).normalize();
+
+var keyMap = {
+	'87': 'forward',
+	'83': 'back',
+	'65': 'left',
+	'68': 'right',
+	'73': 'up',
+	'75': 'down',
+	'74': 'leftRot',
+	'76': 'rightRot',
+	'70': 'flashlight'
+};
+
+var keyStatus = {
+	forward: 0,
+	back: 0,
+	left: 0,
+	right: 0,
+	up: 0,
+	down: 0,
+	leftRot: 0,
+	rightRot: 0,
+	flashlight: 0,
+};
+
+document.onkeydown = function(e) {
+	// Use either which or keyCode, depending on browser support
+	var keyCode = e.which || e.keyCode;
+	keyStatus[keyMap[keyCode]] = 1;
+}
+
+document.onkeyup = function(e) {
+	// Use either which or keyCode, depending on browser support
+	var keyCode = e.which || e.keyCode;
+	keyStatus[keyMap[keyCode]] = 0;
+}
 
 // Texture vertex shader program, which is used to draw the big box and the ground.
 var TEXTURE_VSHADER_SOURCE =
@@ -91,15 +133,9 @@ function main() {
 	// Model view projection matrix
 	mvpMatrix = new Matrix4();
 
-	// Calculate the view matrix and the projection matrix
-	viewMatrix.setLookAt(CameraPara.eye[0], CameraPara.eye[1],
-			CameraPara.eye[2], CameraPara.at[0], CameraPara.at[1],
-			CameraPara.at[2], CameraPara.up[0], CameraPara.up[1],
-			CameraPara.up[2]);
-	projMatrix.setPerspective(CameraPara.fov, canvas.width / canvas.height,
-			CameraPara.near, CameraPara.far);
+	
 	var tick = function() {
-		drawEverything(gl);
+		drawEverything(gl, canvas);
 		anime = requestAnimationFrame(tick, canvas);
 	};
 	tick();
@@ -161,14 +197,22 @@ function loadTexture(gl, tex, u_Sampler, image) {
 	tex.isTextureImageReady = 1;
 }
 
-function drawEverything(gl) {
+function drawEverything(gl, canvas) {
 	gl.useProgram(texureProgram);
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.enable(gl.DEPTH_TEST);
 	// Clear color and depth buffer
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
+	var deltaTime = getElapsedTime();
+	calculateCameraParameters((MOVE_VELOCITY * deltaTime) / 1000.0,
+					(ROT_VELOCITY * deltaTime) / 1000.0);
+	// Calculate the view matrix and the projection matrix
+	viewMatrix.setLookAt(eye.elements[0], eye.elements[1], eye.elements[2],
+						at.elements[0], at.elements[1], at.elements[2],
+						up.elements[0], up.elements[1], up.elements[2]);
+	projMatrix.setPerspective(CameraPara.fov, canvas.width / canvas.height,
+			CameraPara.near, CameraPara.far);
 	for (var i = 0; i < textureArticleList.length; i++) {
 		var textureArticle = textureArticleList[i];
 		modelMatrix.setTranslate(textureArticle.translate[0], textureArticle.translate[1],
@@ -230,4 +274,44 @@ function initAttributeVariable(gl, a_attribute, buffer) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 	gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
 	gl.enableVertexAttribArray(a_attribute);
+}
+
+function getElapsedTime() {
+	var newTime = Date.now();
+	var elapsedTime = newTime - currentTime;
+	currentTime = newTime;
+	return elapsedTime;
+}
+
+function calculateCameraParameters(move, rotate) {
+	var angle = rotate * Math.PI / 180.0;
+	if (keyStatus.forward || keyStatus.back) {
+		var deltaVector = keyStatus.forward ? eyeDirection : VectorReverse(eyeDirection);
+		deltaVector = VectorMultNum(deltaVector, move);
+		at = VectorAdd(at, deltaVector);
+		eye = VectorAdd(eye, deltaVector);
+	}
+	if (keyStatus.left || keyStatus.right) {
+		var deltaVector = keyStatus.right ? rightDirection : VectorReverse(rightDirection);
+		deltaVector = VectorMultNum(deltaVector, move);
+		at = VectorAdd(at, deltaVector);
+		eye = VectorAdd(eye, deltaVector);
+	}
+	if (keyStatus.leftRot || keyStatus.rightRot) {
+		var deltaVector = keyStatus.rightRot ? rightDirection : VectorReverse(rightDirection);
+		deltaVector = VectorMultNum(deltaVector, Math.tan(angle));
+		eyeDirection = VectorAdd(eyeDirection, deltaVector);
+		eyeDirection.normalize();
+		at = VectorAdd(eye, eyeDirection);
+		rightDirection = VectorCross(eyeDirection, up).normalize();
+	}
+	if (keyStatus.up || keyStatus.down) {
+		var deltaVector = keyStatus.up ? up : VectorReverse(up);
+		deltaVector = VectorMultNum(deltaVector, Math.tan(angle));
+		eyeDirection = VectorAdd(eyeDirection, deltaVector);
+		eyeDirection.normalize();
+		at = VectorAdd(eye, eyeDirection);
+		up = VectorCross(rightDirection, eyeDirection);
+		up.normalize();
+	}
 }
