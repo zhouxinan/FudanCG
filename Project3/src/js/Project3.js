@@ -19,6 +19,11 @@ var rightDirection = VectorCross(eyeDirection, up).normalize();
 
 var currentAngle = 0.0;
 
+// Color of Fog
+var fogColor = new Float32Array([0.137, 0.231, 0.423]);
+  // Distance of fog [where fog starts, where fog completely covers object]
+var fogDist = new Float32Array([55, 80]);
+
 // The keycode map is to map javascript keycodes to motions.
 var keycodeMap = {
 	'87': 'forward',
@@ -29,7 +34,9 @@ var keycodeMap = {
 	'75': 'down',
 	'74': 'leftRot',
 	'76': 'rightRot',
-	'70': 'flashlight'
+	'70': 'flashlight',
+	'38': 'increaseFog',
+	'40': 'decreaseFog'
 };
 
 // keypressStatus is to store key press status. 0 for a released key and 1 for a pressed key.
@@ -43,6 +50,8 @@ var keypressStatus = {
 	leftRot: 0,
 	rightRot: 0,
 	flashlight: 0,
+	increaseFog: 0,
+	decreaseFog: 0
 };
 
 // When a key is pressed, set its status to 1.
@@ -90,27 +99,36 @@ var SOLID_VSHADER_SOURCE =
 	'uniform vec3 u_DirectionLight;\n' +		// Directional light color
 	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'uniform vec3 u_PointLightColor;\n' +		// Point light color
-	'uniform vec3 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
+	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
 	'varying vec4 v_Color;\n' +
+	'varying float v_Dist;\n' +
 	'void main() {\n' +
 	'  gl_Position = u_MvpMatrix * a_Position;\n' +
 	'  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
 	'  float nDotL = max(dot(normal, u_DirectionLight), 0.0);\n' +
 	'  vec3 diffuse = a_Color.rgb * nDotL;\n' +
 	'  vec4 vertexPosition = u_ModelMatrix * a_Position;\n' +
-	'  vec3 lightDirection = normalize(u_PointLightPosition-vec3(vertexPosition));\n' +
+	'  vec3 lightDirection = normalize(vec3(u_PointLightPosition-vertexPosition));\n' +
 	'  float nDotL2 = max(dot(normal, lightDirection), 0.0);\n' +
 	'  vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n' +
 	'  vec3 ambient = u_AmbientLight * a_Color.rgb;\n' +
 	'  v_Color = vec4(ambient+diffuse+diffuse2 , a_Color.a);\n' +
+	'  v_Dist = distance(u_ModelMatrix * a_Position, u_PointLightPosition);\n' +
 	'}\n';
 
 // Solid fragment shader program, which is used to draw other articles from the .obj files.
 var SOLID_FSHADER_SOURCE =
 	'precision mediump float;\n' +
 	'varying vec4 v_Color;\n' +
+	'uniform vec3 u_FogColor;\n' + // Color of Fog
+  	'uniform vec2 u_FogDist;\n' +  // Distance of Fog (starting point, end point)
+	'varying float v_Dist;\n' +
 	'void main() {\n' +
-	'  gl_FragColor = v_Color;\n' +
+	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
+  	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
+     // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
+  	'  vec3 color = mix(u_FogColor, vec3(v_Color), fogFactor);\n' +
+  	'  gl_FragColor = vec4(color, v_Color.a);\n' +
 	'}\n';
 
 function main() {
@@ -150,6 +168,10 @@ function main() {
 			'u_PointLightColor');
 	solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram,
 			'u_PointLightPosition');
+	solidProgram.u_FogColor = gl.getUniformLocation(solidProgram,
+			'u_FogColor');
+	solidProgram.u_FogDist = gl.getUniformLocation(solidProgram,
+			'u_FogDist');
 
 	// Get storage locations of attribute and uniform variables in program
 	// object for texture drawing
@@ -229,11 +251,12 @@ function main() {
 function drawEverything(gl, canvas) {
 	gl.useProgram(textureProgram);
 	// Set clear color and enable hidden surface removal
-	gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
 	gl.enable(gl.DEPTH_TEST);
 	// Clear color and depth buffer
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	var deltaTime = getElapsedTime();
+	calculateFog();
 	calculateCameraParameters((MOVE_VELOCITY * deltaTime) / 1000.0,
 			(ROT_VELOCITY * deltaTime) / 1000.0);
 	// Calculate the view matrix and the projection matrix
@@ -271,18 +294,18 @@ function drawEverything(gl, canvas) {
 	// Switch shader program.
 	gl.useProgram(solidProgram);
 	// Set ambient light color.
-	gl.uniform3f(solidProgram.u_AmbientLight, sceneAmbientLight[0],
-			sceneAmbientLight[1], sceneAmbientLight[2]);
+	gl.uniform3fv(solidProgram.u_AmbientLight, sceneAmbientLight);
 	// Set directional light color.
-	gl.uniform3f(solidProgram.u_DirectionLight, sceneDirectionLight[0],
-			sceneDirectionLight[1], sceneDirectionLight[2]);
+	gl.uniform3fv(solidProgram.u_DirectionLight, sceneDirectionLight);
 	// Set point light position.
-	gl.uniform3f(solidProgram.u_PointLightPosition, eye.elements[0],
-			eye.elements[1], eye.elements[2]);
+	gl.uniform4f(solidProgram.u_PointLightPosition, eye.elements[0],
+			eye.elements[1], eye.elements[2], 1.0);
+	// Pass fog color, distances, and eye point to uniform variable
+  	gl.uniform3fv(solidProgram.u_FogColor, fogColor); // Colors
+  	gl.uniform2fv(solidProgram.u_FogDist, fogDist);   // Starting point and end point
 	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor. Otherwise, set black color to u_PointLightColor.
 	if (keypressStatus.flashlight) {
-		gl.uniform3f(solidProgram.u_PointLightColor, scenePointLightColor[0],
-				scenePointLightColor[1], scenePointLightColor[2]);
+		gl.uniform3fv(solidProgram.u_PointLightColor, scenePointLightColor);
 	} else {
 		gl.uniform3f(solidProgram.u_PointLightColor, 0.0, 0.0, 0.0);
 	}
@@ -331,8 +354,7 @@ function drawEverything(gl, canvas) {
 			initAttributeVariable(gl, solidProgram.a_Normal,
 					solidArticle.model.normalBuffer);
 			// Set article color.
-			gl.vertexAttrib3f(solidProgram.a_Color, solidArticle.color[0],
-			solidArticle.color[1], solidArticle.color[2]);
+			gl.vertexAttrib3fv(solidProgram.a_Color, solidArticle.color);
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, solidArticle.model.indexBuffer);
 			gl.drawElements(gl.TRIANGLES, solidArticle.drawingInfo.indices.length,
 					gl.UNSIGNED_SHORT, 0);
@@ -475,6 +497,18 @@ function calculateCameraParameters(move, rotate) {
 		at = VectorAdd(eye, eyeDirection);
 		up = VectorCross(rightDirection, eyeDirection);
 		up.normalize();
+	}
+}
+
+function calculateFog() {
+	if (keypressStatus.increaseFog) {
+		fogDist[1] += 1;
+		return;
+	}
+	if (keypressStatus.decreaseFog) {
+		if (fogDist[1] > fogDist[0]) {
+			fogDist[1] -= 1;
+		}
 	}
 }
 
