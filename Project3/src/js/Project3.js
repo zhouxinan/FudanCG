@@ -74,9 +74,14 @@ var TEXTURE_VSHADER_SOURCE =
 	'uniform mat4 u_MvpMatrix;\n' +
 	'attribute vec2 a_TexCoord;\n' +
 	'varying vec2 v_TexCoord;\n' +
+	//'uniform vec3 u_PointLightColor;\n' +		// Point light color
+	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
+	'varying float v_Dist;\n' +
+	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'void main() {\n' +
 	'  gl_Position = u_MvpMatrix * a_Position;\n' +
 	'  v_TexCoord = a_TexCoord;\n' +
+	'  v_Dist = distance(u_ModelMatrix * a_Position, u_PointLightPosition);\n' +
 	'}\n';
 
 // Texture fragment shader program, which is used to draw the box and the ground.
@@ -84,8 +89,16 @@ var TEXTURE_FSHADER_SOURCE =
 	'precision mediump float;\n' +
 	'uniform sampler2D u_Sampler;\n' +
 	'varying vec2 v_TexCoord;\n' +
+	'varying float v_Dist;\n' +
+	'uniform vec3 u_FogColor;\n' + // Color of Fog
+  	'uniform vec2 u_FogDist;\n' +  // Distance of Fog (starting point, end point)
 	'void main() {\n' +
-	'  gl_FragColor = texture2D(u_Sampler, v_TexCoord);\n' +
+	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
+  	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
+     // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
+    '  vec4 v_Color = texture2D(u_Sampler, v_TexCoord);\n' +
+  	'  vec3 color = mix(u_FogColor, vec3(v_Color), fogFactor);\n' +
+  	'  gl_FragColor = vec4(color, v_Color.a);\n' +
 	'}\n';
 
 // Solid vertex shader program, which is used to draw other articles from the .obj files.
@@ -183,6 +196,14 @@ function main() {
 			'a_TexCoord');
 	textureProgram.u_Sampler = gl.getUniformLocation(textureProgram,
 			'u_Sampler');
+	textureProgram.u_PointLightPosition = gl.getUniformLocation(textureProgram,
+			'u_PointLightPosition');
+	textureProgram.u_ModelMatrix = gl.getUniformLocation(textureProgram,
+			'u_ModelMatrix');
+	textureProgram.u_FogColor = gl.getUniformLocation(textureProgram,
+			'u_FogColor');
+	textureProgram.u_FogDist = gl.getUniformLocation(textureProgram,
+			'u_FogDist');
 
 	if (textureProgram.a_Position < 0 || textureProgram.a_TexCoord < 0
 			|| !textureProgram.u_MvpMatrix || !textureProgram.u_Sampler
@@ -250,6 +271,13 @@ function main() {
 
 function drawEverything(gl, canvas) {
 	gl.useProgram(textureProgram);
+	// Set point light position.
+	gl.uniform4f(textureProgram.u_PointLightPosition, eye.elements[0],
+			eye.elements[1], eye.elements[2], 1.0);
+	// Pass fog color, distances, and eye point to uniform variable
+  	gl.uniform3fv(textureProgram.u_FogColor, fogColor); // Colors
+  	gl.uniform2fv(textureProgram.u_FogDist, fogDist);   // Starting point and end point
+	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor. Otherwise, set black color to u_PointLightColor.
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
 	gl.enable(gl.DEPTH_TEST);
