@@ -86,23 +86,28 @@ var TEXTURE_VSHADER_SOURCE =
 // Texture fragment shader program, which is used to draw the box and the ground.
 var TEXTURE_FSHADER_SOURCE =
 	'precision mediump float;\n' +
-	'uniform sampler2D u_Sampler;\n' +
 	'varying vec2 v_TexCoord;\n' +
 	'varying float v_Dist;\n' +
+	'uniform sampler2D u_Sampler;\n' +
 	'uniform vec3 u_FogColor;\n' + // Color of Fog
   	'uniform vec2 u_FogDist;\n' +  // Distance of Fog (starting point, end point)
   	'uniform vec3 u_PointLightColor;\n' +		// Point light color
   	'uniform bool u_isPointLightOn;\n' +
+  	'uniform vec3 u_AmbientLight;\n' +			// Ambient light color
 	'void main() {\n' +
 	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
   	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
      // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
-    '  vec4 v_Color = texture2D(u_Sampler, v_TexCoord);\n' +
+    '  vec4 color = texture2D(u_Sampler, v_TexCoord);\n' +
+    '  vec3 ambient = u_AmbientLight * color.rgb;\n' +
+    '  vec3 diffuse2 = u_PointLightColor * color.rgb;\n' +
     '  if (u_isPointLightOn) {\n' +
-  	'    v_Color = vec4(u_PointLightColor * vec3(v_Color), v_Color.a);\n' +
+  	'    color = vec4(color.rgb+ambient+diffuse2, color.a);\n' +
+  	'  } else {\n' +
+  	'    color = vec4(color.rgb+ambient, color.a);\n' +
   	'  }\n' +
-  	'    vec3 color = mix(u_FogColor, vec3(v_Color), fogFactor);\n' +
-	'    gl_FragColor = vec4(color, v_Color.a);\n' +
+  	'    color = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
+	'    gl_FragColor = color;\n' +
 	'}\n';
 
 // Solid vertex shader program, which is used to draw other articles from the .obj files.
@@ -113,7 +118,7 @@ var SOLID_VSHADER_SOURCE =
 	'uniform mat4 u_MvpMatrix;\n' +
 	'uniform mat4 u_NormalMatrix;\n' +			// Transformation matrix of the normal
 	'uniform vec3 u_AmbientLight;\n' +			// Ambient light color
-	'uniform vec3 u_DirectionLight;\n' +		// Directional light color
+	'uniform vec3 u_DirectionLight;\n' +		// Directional light
 	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'uniform vec3 u_PointLightColor;\n' +		// Point light color
 	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
@@ -129,8 +134,8 @@ var SOLID_VSHADER_SOURCE =
 	'  float nDotL2 = max(dot(normal, lightDirection), 0.0);\n' +
 	'  vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n' +
 	'  vec3 ambient = u_AmbientLight * a_Color.rgb;\n' +
-	'  v_Color = vec4(ambient+diffuse+diffuse2 , a_Color.a);\n' +
-	'  v_Dist = distance(u_ModelMatrix * a_Position, u_PointLightPosition);\n' +
+	'  v_Color = vec4(ambient+diffuse+diffuse2, a_Color.a);\n' +
+	'  v_Dist = distance(vertexPosition, u_PointLightPosition);\n' +
 	'}\n';
 
 // Solid fragment shader program, which is used to draw other articles from the .obj files.
@@ -212,6 +217,8 @@ function main() {
 			'u_PointLightColor');
 	textureProgram.u_isPointLightOn = gl.getUniformLocation(textureProgram,
 			'u_isPointLightOn');
+	textureProgram.u_AmbientLight = gl.getUniformLocation(textureProgram,
+			'u_AmbientLight');
 
 	if (textureProgram.a_Position < 0 || textureProgram.a_TexCoord < 0
 			|| !textureProgram.u_MvpMatrix || !textureProgram.u_Sampler
@@ -279,6 +286,8 @@ function main() {
 
 function drawEverything(gl, canvas) {
 	gl.useProgram(textureProgram);
+	// Set ambient light color.
+	gl.uniform3fv(textureProgram.u_AmbientLight, sceneAmbientLight);
 	// Set point light position.
 	gl.uniform4f(textureProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
@@ -286,12 +295,10 @@ function drawEverything(gl, canvas) {
   	gl.uniform3fv(textureProgram.u_FogColor, fogColor); // Colors
   	gl.uniform2fv(textureProgram.u_FogDist, fogDist);   // Starting point and end point
   	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
-
   	if (keypressStatus.flashlight) {
   		gl.uniform1i(textureProgram.u_isPointLightOn, 1);
 	} else {
 		gl.uniform1i(textureProgram.u_isPointLightOn, 0);
-		//gl.uniform3f(textureProgram.u_PointLightColor, 0.0, 0.0, 0.0);
 	}
 	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor. Otherwise, set black color to u_PointLightColor.
 	// Set clear color and enable hidden surface removal
