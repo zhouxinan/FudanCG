@@ -13,7 +13,7 @@ var currentTime = Date.now();
 var eye = new Vector3(CameraPara.eye);
 var at = new Vector3(CameraPara.at);
 var up = new Vector3(CameraPara.up).normalize();
-// Eye direction and right-hand direction.
+// Normalized eye direction and right-hand direction.
 var eyeDirection = VectorMinus(at, eye).normalize();
 var rightDirection = VectorCross(eyeDirection, up).normalize();
 
@@ -71,13 +71,12 @@ document.onkeyup = function(e) {
 // Texture vertex shader program, which is used to draw the box and the ground.
 var TEXTURE_VSHADER_SOURCE =
 	'attribute vec4 a_Position;\n' +
-	'uniform mat4 u_MvpMatrix;\n' +
 	'attribute vec2 a_TexCoord;\n' +
-	'varying vec2 v_TexCoord;\n' +
-	//'uniform vec3 u_PointLightColor;\n' +		// Point light color
-	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
-	'varying float v_Dist;\n' +
+	'uniform mat4 u_MvpMatrix;\n' +
 	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
+	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
+	'varying vec2 v_TexCoord;\n' +
+	'varying float v_Dist;\n' +
 	'void main() {\n' +
 	'  gl_Position = u_MvpMatrix * a_Position;\n' +
 	'  v_TexCoord = a_TexCoord;\n' +
@@ -92,13 +91,18 @@ var TEXTURE_FSHADER_SOURCE =
 	'varying float v_Dist;\n' +
 	'uniform vec3 u_FogColor;\n' + // Color of Fog
   	'uniform vec2 u_FogDist;\n' +  // Distance of Fog (starting point, end point)
+  	'uniform vec3 u_PointLightColor;\n' +		// Point light color
+  	'uniform bool u_isPointLightOn;\n' +
 	'void main() {\n' +
 	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
   	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
      // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
     '  vec4 v_Color = texture2D(u_Sampler, v_TexCoord);\n' +
-  	'  vec3 color = mix(u_FogColor, vec3(v_Color), fogFactor);\n' +
-  	'  gl_FragColor = vec4(color, v_Color.a);\n' +
+    '  if (u_isPointLightOn) {\n' +
+  	'    v_Color = vec4(u_PointLightColor * vec3(v_Color), v_Color.a);\n' +
+  	'  }\n' +
+  	'    vec3 color = mix(u_FogColor, vec3(v_Color), fogFactor);\n' +
+	'    gl_FragColor = vec4(color, v_Color.a);\n' +
 	'}\n';
 
 // Solid vertex shader program, which is used to draw other articles from the .obj files.
@@ -204,6 +208,10 @@ function main() {
 			'u_FogColor');
 	textureProgram.u_FogDist = gl.getUniformLocation(textureProgram,
 			'u_FogDist');
+	textureProgram.u_PointLightColor = gl.getUniformLocation(textureProgram,
+			'u_PointLightColor');
+	textureProgram.u_isPointLightOn = gl.getUniformLocation(textureProgram,
+			'u_isPointLightOn');
 
 	if (textureProgram.a_Position < 0 || textureProgram.a_TexCoord < 0
 			|| !textureProgram.u_MvpMatrix || !textureProgram.u_Sampler
@@ -277,6 +285,14 @@ function drawEverything(gl, canvas) {
 	// Pass fog color, distances, and eye point to uniform variable
   	gl.uniform3fv(textureProgram.u_FogColor, fogColor); // Colors
   	gl.uniform2fv(textureProgram.u_FogDist, fogDist);   // Starting point and end point
+  	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
+
+  	if (keypressStatus.flashlight) {
+  		gl.uniform1i(textureProgram.u_isPointLightOn, 1);
+	} else {
+		gl.uniform1i(textureProgram.u_isPointLightOn, 0);
+		//gl.uniform3f(textureProgram.u_PointLightColor, 0.0, 0.0, 0.0);
+	}
 	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor. Otherwise, set black color to u_PointLightColor.
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
@@ -301,6 +317,8 @@ function drawEverything(gl, canvas) {
 				textureArticle.translate[1], textureArticle.translate[2]);
 		modelMatrix.scale(textureArticle.scale[0], textureArticle.scale[1],
 				textureArticle.scale[2]);
+		gl.uniformMatrix4fv(textureProgram.u_ModelMatrix, false,
+					modelMatrix.elements);
 		// Calculate the model view projection matrix
 		mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
 		gl.uniformMatrix4fv(textureProgram.u_MvpMatrix, false,
