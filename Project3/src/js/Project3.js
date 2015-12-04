@@ -1,13 +1,19 @@
 // This array is to store texture articles (the floor and the box).
 var textureArticleList = [];
 // This is the texture object of the box with isTextureImageReady property.
-var boxTexture = {texture: -1, isTextureImageReady: 0};
+var boxTexture = {
+	texture : -1,
+	isTextureImageReady : 0
+};
 // This is the texture object of the floor with isTextureImageReady property.
-var floorTexture = {texture: -1, isTextureImageReady: 0};
+var floorTexture = {
+	texture : -1,
+	isTextureImageReady : 0
+};
 // Two shader programs used in this project.
 var textureProgram;
 var solidProgram;
-// currentTime is to store current time. 
+// currentTime is to store current time.
 var currentTime = Date.now();
 // These three parameters are used in the calculation of the view matrix.
 var eye = new Vector3(CameraPara.eye);
@@ -19,38 +25,39 @@ var rightDirection = VectorCross(eyeDirection, up).normalize();
 // Current angle used in the calculation of the bird's position.
 var currentAngle = 0.0;
 // Color of Fog
-var fogColor = new Float32Array([0.137, 0.231, 0.423]);
+var fogColor = new Float32Array([ 0.137, 0.231, 0.423 ]);
 // Distance of fog [where fog starts, where fog completely covers object]
-var fogDist = new Float32Array([55, 80]);
+var fogDist = new Float32Array([ 55, 80 ]);
 
 // The keycode map is to map javascript keycodes to motions.
 var keyCodeMap = {
-	'87': 'forward',
-	'83': 'back',
-	'65': 'left',
-	'68': 'right',
-	'73': 'up',
-	'75': 'down',
-	'74': 'leftRotate',
-	'76': 'rightRotate',
-	'70': 'flashlight',
-	'38': 'increaseFog',
-	'40': 'decreaseFog'
+	'87' : 'forward',
+	'83' : 'back',
+	'65' : 'left',
+	'68' : 'right',
+	'73' : 'up',
+	'75' : 'down',
+	'74' : 'leftRotate',
+	'76' : 'rightRotate',
+	'70' : 'flashlight',
+	'38' : 'increaseFog',
+	'40' : 'decreaseFog'
 };
 
-// keypressStatus is to store key press status. 0 for a released key and 1 for a pressed key.
+// keypressStatus is to store key press status. 0 for a released key and 1 for a
+// pressed key.
 var keypressStatus = {
-	forward: 0,
-	back: 0,
-	left: 0,
-	right: 0,
-	up: 0,
-	down: 0,
-	leftRotate: 0,
-	rightRotate: 0,
-	flashlight: 0,
-	increaseFog: 0,
-	decreaseFog: 0
+	forward : 0,
+	back : 0,
+	left : 0,
+	right : 0,
+	up : 0,
+	down : 0,
+	leftRotate : 0,
+	rightRotate : 0,
+	flashlight : 0,
+	increaseFog : 0,
+	decreaseFog : 0
 };
 
 // When a key is pressed, set its status to 1.
@@ -101,9 +108,9 @@ var TEXTURE_FSHADER_SOURCE =
     '  vec4 color = texture2D(u_Sampler, v_TexCoord);\n' +
     '  vec3 ambient = u_AmbientLight * color.rgb;\n' +
     '  vec3 diffuse = u_PointLightColor * color.rgb;\n' +
-  	'    color = vec4(color.rgb+ambient+diffuse, color.a);\n' +
+  	'  color = vec4(color.rgb+ambient+diffuse, color.a);\n' +
   	// Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + color * fogFactor
-	'    gl_FragColor = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
+	'  gl_FragColor = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
 	'}\n';
 
 // Solid vertex shader program, which is used to draw articles from the .obj files.
@@ -193,7 +200,7 @@ function main() {
 			'u_PointLightColor');
 	textureProgram.u_AmbientLight = gl.getUniformLocation(textureProgram,
 			'u_AmbientLight');
-	
+
 	// Get storage locations of attribute and uniform variables in program
 	// object for single color drawing
 	solidProgram.a_Position = gl.getAttribLocation(solidProgram, 'a_Position');
@@ -372,7 +379,7 @@ function drawEverything(gl, canvas) {
 	// Pass fog color, distances to uniform variable
 	gl.uniform3fv(solidProgram.u_FogColor, fogColor); // Colors
 	// Starting point and end point
-	gl.uniform2fv(solidProgram.u_FogDist, fogDist); 
+	gl.uniform2fv(solidProgram.u_FogDist, fogDist);
 	for (var i = 0; i < ObjectList.length; i++) {
 		var solidArticle = ObjectList[i];
 		if (solidArticle.objDoc != null && solidArticle.objDoc.isMTLComplete()) {
@@ -420,7 +427,8 @@ function drawEverything(gl, canvas) {
 					solidArticle.model.vertexBuffer);
 			initAttributeVariable(gl, solidProgram.a_Normal,
 					solidArticle.model.normalBuffer);
-			initAttributeVariable(gl, solidProgram.a_Color, solidArticle.model.colorBuffer);
+			initAttributeVariable(gl, solidProgram.a_Color,
+					solidArticle.model.colorBuffer);
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,
 					solidArticle.model.indexBuffer);
 			gl.drawElements(gl.TRIANGLES,
@@ -667,7 +675,7 @@ function onReadComplete(gl, model, objDoc) {
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.colorBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, drawingInfo.colors, gl.STATIC_DRAW);
-	
+
 	// Write the indices to the buffer object
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indexBuffer);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, drawingInfo.indices, gl.STATIC_DRAW);
