@@ -7,21 +7,20 @@ var floorTexture = {texture: -1, isTextureImageReady: 0};
 // Two shader programs used in this project.
 var textureProgram;
 var solidProgram;
-// currentTime is to store the current time. 
+// currentTime is to store current time. 
 var currentTime = Date.now();
-// These three parameters are used in the camera setting.
+// These three parameters are used in the calculation of the view matrix.
 var eye = new Vector3(CameraPara.eye);
 var at = new Vector3(CameraPara.at);
 var up = new Vector3(CameraPara.up).normalize();
 // Normalized eye direction and right-hand direction.
 var eyeDirection = VectorMinus(at, eye).normalize();
 var rightDirection = VectorCross(eyeDirection, up).normalize();
-
+// Current angle used in the calculation of the bird's position.
 var currentAngle = 0.0;
-
 // Color of Fog
 var fogColor = new Float32Array([0.137, 0.231, 0.423]);
-  // Distance of fog [where fog starts, where fog completely covers object]
+// Distance of fog [where fog starts, where fog completely covers object]
 var fogDist = new Float32Array([55, 80]);
 
 // The keycode map is to map javascript keycodes to motions.
@@ -32,8 +31,8 @@ var keycodeMap = {
 	'68': 'right',
 	'73': 'up',
 	'75': 'down',
-	'74': 'leftRot',
-	'76': 'rightRot',
+	'74': 'leftRotate',
+	'76': 'rightRotate',
 	'70': 'flashlight',
 	'38': 'increaseFog',
 	'40': 'decreaseFog'
@@ -47,8 +46,8 @@ var keypressStatus = {
 	right: 0,
 	up: 0,
 	down: 0,
-	leftRot: 0,
-	rightRot: 0,
+	leftRotate: 0,
+	rightRotate: 0,
 	flashlight: 0,
 	increaseFog: 0,
 	decreaseFog: 0
@@ -56,16 +55,19 @@ var keypressStatus = {
 
 // When a key is pressed, set its status to 1.
 document.onkeydown = function(e) {
-	// Use either which or keyCode, depending on browser support
-	var keyCode = e.which || e.keyCode;
-	keypressStatus[keycodeMap[keyCode]] = 1;
+	setKeypressStatus(e, 1);
 }
 
 // When a key is released, set its status to 0.
 document.onkeyup = function(e) {
+	setKeypressStatus(e, 0);
+}
+
+// This function is to set keypress status of a key.
+function setKeypressStatus(e, status) {
 	// Use either which or keyCode, depending on browser support
 	var keyCode = e.which || e.keyCode;
-	keypressStatus[keycodeMap[keyCode]] = 0;
+	keypressStatus[keycodeMap[keyCode]] = status;
 }
 
 // Texture vertex shader program, which is used to draw the box and the ground.
@@ -86,14 +88,14 @@ var TEXTURE_VSHADER_SOURCE =
 // Texture fragment shader program, which is used to draw the box and the ground.
 var TEXTURE_FSHADER_SOURCE =
 	'precision mediump float;\n' +
-	'varying vec2 v_TexCoord;\n' +
-	'varying float v_Dist;\n' +
 	'uniform sampler2D u_Sampler;\n' +
-	'uniform vec3 u_FogColor;\n' + // Color of Fog
-  	'uniform vec2 u_FogDist;\n' +  // Distance of Fog (starting point, end point)
+	'uniform vec3 u_FogColor;\n' + 				// Color of Fog
+  	'uniform vec2 u_FogDist;\n' +  				// Distance of Fog (starting point, end point)
   	'uniform vec3 u_PointLightColor;\n' +		// Point light color
   	'uniform bool u_isPointLightOn;\n' +
   	'uniform vec3 u_AmbientLight;\n' +			// Ambient light color
+  	'varying vec2 v_TexCoord;\n' +
+	'varying float v_Dist;\n' +
 	'void main() {\n' +
 	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
   	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
@@ -135,21 +137,22 @@ var SOLID_VSHADER_SOURCE =
 	'  vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n' +
 	'  vec3 ambient = u_AmbientLight * a_Color.rgb;\n' +
 	'  v_Color = vec4(ambient+diffuse+diffuse2, a_Color.a);\n' +
-	'  v_Dist = distance(vertexPosition, u_PointLightPosition);\n' +
+	// Use the negative z value of each vertex in view coordinate system
+  	'  v_Dist = gl_Position.w;\n' +
 	'}\n';
 
 // Solid fragment shader program, which is used to draw other articles from the .obj files.
 var SOLID_FSHADER_SOURCE =
 	'precision mediump float;\n' +
-	'varying vec4 v_Color;\n' +
 	'uniform vec3 u_FogColor;\n' + // Color of Fog
   	'uniform vec2 u_FogDist;\n' +  // Distance of Fog (starting point, end point)
+	'varying vec4 v_Color;\n' +
 	'varying float v_Dist;\n' +
 	'void main() {\n' +
 	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
-  	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
-     // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
-  	'  vec3 color = mix(u_FogColor, vec3(v_Color), fogFactor);\n' +
+	'  float fogFactor = (u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x);\n' +
+    // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
+    '  vec3 color = mix(u_FogColor, vec3(v_Color), clamp(fogFactor, 0.0, 1.0));\n' +
   	'  gl_FragColor = vec4(color, v_Color.a);\n' +
 	'}\n';
 
@@ -168,11 +171,14 @@ function main() {
 	textureProgram = createProgram(gl, TEXTURE_VSHADER_SOURCE,
 			TEXTURE_FSHADER_SOURCE);
 	solidProgram = createProgram(gl, SOLID_VSHADER_SOURCE, SOLID_FSHADER_SOURCE);
+
 	if (!solidProgram || !textureProgram) {
 		console.log('Failed to intialize shaders.');
 		return;
 	}
 
+	// Get storage locations of attribute and uniform variables in program
+	// object for single color drawing
 	solidProgram.a_Position = gl.getAttribLocation(solidProgram, 'a_Position');
 	solidProgram.a_Color = gl.getAttribLocation(solidProgram, 'a_Color');
 	solidProgram.a_Normal = gl.getAttribLocation(solidProgram, 'a_Normal');
@@ -190,25 +196,23 @@ function main() {
 			'u_PointLightColor');
 	solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram,
 			'u_PointLightPosition');
-	solidProgram.u_FogColor = gl.getUniformLocation(solidProgram,
-			'u_FogColor');
-	solidProgram.u_FogDist = gl.getUniformLocation(solidProgram,
-			'u_FogDist');
+	solidProgram.u_FogColor = gl.getUniformLocation(solidProgram, 'u_FogColor');
+	solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDist');
 
 	// Get storage locations of attribute and uniform variables in program
 	// object for texture drawing
 	textureProgram.a_Position = gl.getAttribLocation(textureProgram,
 			'a_Position');
-	textureProgram.u_MvpMatrix = gl.getUniformLocation(textureProgram,
-			'u_MvpMatrix');
 	textureProgram.a_TexCoord = gl.getAttribLocation(textureProgram,
 			'a_TexCoord');
-	textureProgram.u_Sampler = gl.getUniformLocation(textureProgram,
-			'u_Sampler');
-	textureProgram.u_PointLightPosition = gl.getUniformLocation(textureProgram,
-			'u_PointLightPosition');
+	textureProgram.u_MvpMatrix = gl.getUniformLocation(textureProgram,
+			'u_MvpMatrix');
 	textureProgram.u_ModelMatrix = gl.getUniformLocation(textureProgram,
 			'u_ModelMatrix');
+	textureProgram.u_PointLightPosition = gl.getUniformLocation(textureProgram,
+			'u_PointLightPosition');
+	textureProgram.u_Sampler = gl.getUniformLocation(textureProgram,
+			'u_Sampler');
 	textureProgram.u_FogColor = gl.getUniformLocation(textureProgram,
 			'u_FogColor');
 	textureProgram.u_FogDist = gl.getUniformLocation(textureProgram,
@@ -221,13 +225,18 @@ function main() {
 			'u_AmbientLight');
 
 	if (textureProgram.a_Position < 0 || textureProgram.a_TexCoord < 0
-			|| !textureProgram.u_MvpMatrix || !textureProgram.u_Sampler
-			|| solidProgram.a_Position < 0 || solidProgram.a_Color < 0
-			|| solidProgram.a_Normal < 0 || !solidProgram.u_MvpMatrix
-			|| !solidProgram.u_NormalMatrix || !solidProgram.u_AmbientLight
-			|| !solidProgram.u_DirectionLight || !solidProgram.u_ModelMatrix
-			|| !solidProgram.u_PointLightColor
-			|| !solidProgram.u_PointLightPosition) {
+			|| !textureProgram.u_MvpMatrix || !textureProgram.u_ModelMatrix
+			|| !textureProgram.u_PointLightPosition
+			|| !textureProgram.u_Sampler || !textureProgram.u_FogColor
+			|| !textureProgram.u_FogDist || !textureProgram.u_PointLightColor
+			|| !textureProgram.u_isPointLightOn
+			|| !textureProgram.u_AmbientLight || solidProgram.a_Position < 0
+			|| solidProgram.a_Color < 0 || solidProgram.a_Normal < 0
+			|| !solidProgram.u_MvpMatrix || !solidProgram.u_NormalMatrix
+			|| !solidProgram.u_AmbientLight || !solidProgram.u_DirectionLight
+			|| !solidProgram.u_ModelMatrix || !solidProgram.u_PointLightColor
+			|| !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor
+			|| !solidProgram.u_FogDist) {
 		console
 				.log('Failed to get the storage location of attribute or uniform variable');
 		return;
@@ -292,15 +301,18 @@ function drawEverything(gl, canvas) {
 	gl.uniform4f(textureProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
 	// Pass fog color, distances, and eye point to uniform variable
-  	gl.uniform3fv(textureProgram.u_FogColor, fogColor); // Colors
-  	gl.uniform2fv(textureProgram.u_FogDist, fogDist);   // Starting point and end point
-  	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
-  	if (keypressStatus.flashlight) {
-  		gl.uniform1i(textureProgram.u_isPointLightOn, 1);
+	// Fog color
+	gl.uniform3fv(textureProgram.u_FogColor, fogColor);
+	// Starting point and end point
+	gl.uniform2fv(textureProgram.u_FogDist, fogDist); 
+	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
+	if (keypressStatus.flashlight) {
+		gl.uniform1i(textureProgram.u_isPointLightOn, 1);
 	} else {
 		gl.uniform1i(textureProgram.u_isPointLightOn, 0);
 	}
-	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor. Otherwise, set black color to u_PointLightColor.
+	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
+	// Otherwise, set black color to u_PointLightColor.
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
 	gl.enable(gl.DEPTH_TEST);
@@ -325,7 +337,7 @@ function drawEverything(gl, canvas) {
 		modelMatrix.scale(textureArticle.scale[0], textureArticle.scale[1],
 				textureArticle.scale[2]);
 		gl.uniformMatrix4fv(textureProgram.u_ModelMatrix, false,
-					modelMatrix.elements);
+				modelMatrix.elements);
 		// Calculate the model view projection matrix
 		mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
 		gl.uniformMatrix4fv(textureProgram.u_MvpMatrix, false,
@@ -354,9 +366,11 @@ function drawEverything(gl, canvas) {
 	gl.uniform4f(solidProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
 	// Pass fog color, distances, and eye point to uniform variable
-  	gl.uniform3fv(solidProgram.u_FogColor, fogColor); // Colors
-  	gl.uniform2fv(solidProgram.u_FogDist, fogDist);   // Starting point and end point
-	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor. Otherwise, set black color to u_PointLightColor.
+	gl.uniform3fv(solidProgram.u_FogColor, fogColor); // Colors
+	gl.uniform2fv(solidProgram.u_FogDist, fogDist); // Starting point and end
+													// point
+	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
+	// Otherwise, set black color to u_PointLightColor.
 	if (keypressStatus.flashlight) {
 		gl.uniform3fv(solidProgram.u_PointLightColor, scenePointLightColor);
 	} else {
@@ -365,32 +379,35 @@ function drawEverything(gl, canvas) {
 	for (var i = 0; i < ObjectList.length; i++) {
 		var solidArticle = ObjectList[i];
 		if (solidArticle.objDoc != null && solidArticle.objDoc.isMTLComplete()) {
-			solidArticle.drawingInfo = onReadComplete(gl, solidArticle.model, solidArticle.objDoc);
+			solidArticle.drawingInfo = onReadComplete(gl, solidArticle.model,
+					solidArticle.objDoc);
 			solidArticle.objname = solidArticle.objDoc.objects[0].name;
 			solidArticle.objDoc = null;
 		}
 		if (solidArticle.drawingInfo) {
 			modelMatrix.setIdentity();
-				for (var j = 0; j < solidArticle.transform.length; j++) {
-					var trans = solidArticle.transform[j];
-					if (trans.type === "translate") {
-						if (solidArticle.objname === "bird") {
-							currentAngle = (currentAngle + (90.0 * deltaTime) / 1000.0) % 360.0;
-							var angle = currentAngle * Math.PI / 180.0;
-							modelMatrix.translate(10.0 * Math.sin(angle), 5.0 + 1.5 * Math.sin(angle * 2), 10.0 * Math.cos(angle));
-							modelMatrix.rotate(currentAngle, 0.0, 1.0, 0.0);
-						} else {
-							modelMatrix.translate(trans.content[0],
-							trans.content[1], trans.content[2]);
-						}
-					} else if (trans.type === "rotate") {
-						modelMatrix.rotate(trans.content[0], trans.content[1],
-								trans.content[2], trans.content[3]);
-					} else if (trans.type === "scale") {
-						modelMatrix.scale(trans.content[0], trans.content[1],
-								trans.content[2]);
+			for (var j = 0; j < solidArticle.transform.length; j++) {
+				var trans = solidArticle.transform[j];
+				if (trans.type === "translate") {
+					if (solidArticle.objname === "bird") {
+						currentAngle = (currentAngle + (90.0 * deltaTime) / 1000.0) % 360.0;
+						var angle = currentAngle * Math.PI / 180.0;
+						modelMatrix.translate(10.0 * Math.sin(angle),
+								5.0 + 1.5 * Math.sin(angle * 2), 10.0 * Math
+										.cos(angle));
+						modelMatrix.rotate(currentAngle, 0.0, 1.0, 0.0);
+					} else {
+						modelMatrix.translate(trans.content[0],
+								trans.content[1], trans.content[2]);
 					}
+				} else if (trans.type === "rotate") {
+					modelMatrix.rotate(trans.content[0], trans.content[1],
+							trans.content[2], trans.content[3]);
+				} else if (trans.type === "scale") {
+					modelMatrix.scale(trans.content[0], trans.content[1],
+							trans.content[2]);
 				}
+			}
 			gl.uniformMatrix4fv(solidProgram.u_ModelMatrix, false,
 					modelMatrix.elements);
 			mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
@@ -408,9 +425,11 @@ function drawEverything(gl, canvas) {
 					solidArticle.model.normalBuffer);
 			// Set article color.
 			gl.vertexAttrib3fv(solidProgram.a_Color, solidArticle.color);
-			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, solidArticle.model.indexBuffer);
-			gl.drawElements(gl.TRIANGLES, solidArticle.drawingInfo.indices.length,
-					gl.UNSIGNED_SHORT, 0);
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,
+					solidArticle.model.indexBuffer);
+			gl.drawElements(gl.TRIANGLES,
+					solidArticle.drawingInfo.indices.length, gl.UNSIGNED_SHORT,
+					0);
 		}
 	}
 }
@@ -533,8 +552,8 @@ function calculateCameraParameters(move, rotate) {
 		at = VectorAdd(at, deltaVector);
 		eye = VectorAdd(eye, deltaVector);
 	}
-	if (keypressStatus.leftRot || keypressStatus.rightRot) {
-		var deltaVector = keypressStatus.rightRot ? rightDirection
+	if (keypressStatus.leftRotate || keypressStatus.rightRotate) {
+		var deltaVector = keypressStatus.rightRotate ? rightDirection
 				: VectorReverse(rightDirection);
 		deltaVector = VectorMultNum(deltaVector, Math.tan(angle));
 		eyeDirection = VectorAdd(eyeDirection, deltaVector);
@@ -554,11 +573,11 @@ function calculateCameraParameters(move, rotate) {
 }
 
 function calculateFog() {
-	if (keypressStatus.increaseFog) {
+	if (keypressStatus.decreaseFog) {
 		fogDist[1] += 1;
 		return;
 	}
-	if (keypressStatus.decreaseFog) {
+	if (keypressStatus.increaseFog) {
 		if (fogDist[1] > fogDist[0]) {
 			fogDist[1] -= 1;
 		}
@@ -595,7 +614,7 @@ function createEmptyArrayBuffer(gl, a_attribute, num, type) {
 	// Assign the buffer object to the attribute variable
 	gl.vertexAttribPointer(a_attribute, num, type, false, 0, 0);
 	// Enable the assignment
-	gl.enableVertexAttribArray(a_attribute); 
+	gl.enableVertexAttribArray(a_attribute);
 	buffer.num = num;
 	buffer.type = gl.FLOAT;
 
@@ -613,8 +632,9 @@ function readOBJFile(fileName, gl, model, scale, reverse) {
 		}
 	}
 	// Create a request to acquire the file.
-	request.open('GET', fileName, true); 
-	request.send(); // Send the request
+	request.open('GET', fileName, true);
+	// Send the request
+	request.send();
 }
 
 // OBJ File has been read
