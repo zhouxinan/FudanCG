@@ -106,7 +106,9 @@ var TEXTURE_FSHADER_SOURCE =
 	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
   	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
     '  vec4 color = texture2D(u_Sampler, v_TexCoord);\n' +
+    // Calculate the color due to ambient reflection
     '  vec3 ambient = u_AmbientLight * color.rgb;\n' +
+    // Calculate the color due to diffuse reflection
     '  vec3 diffuse = u_PointLightColor * color.rgb;\n' +
   	'  color = vec4(color.rgb+ambient+diffuse, color.a);\n' +
   	// Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + color * fogFactor
@@ -129,13 +131,21 @@ var SOLID_VSHADER_SOURCE =
 	'varying float v_Dist;\n' +
 	'void main() {\n' +
 	'  gl_Position = u_MvpMatrix * a_Position;\n' +
+    // Recalculate the normal based on the model matrix and make its length 1.
 	'  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
+	// The dot product of the light direction and the normal
 	'  float nDotL = max(dot(normal, u_DirectionLight), 0.0);\n' +
+	// Calculate the color due to diffuse reflection of directional light
 	'  vec3 diffuse = a_Color.rgb * nDotL;\n' +
+	// Calculate world coordinate of vertex
 	'  vec4 vertexPosition = u_ModelMatrix * a_Position;\n' +
+    // Calculate the point light direction and make it 1.0 in length
 	'  vec3 pointLightDirection = normalize(vec3(u_PointLightPosition - vertexPosition));\n' +
+	// The dot product of the point light direction and the normal
 	'  float nDotL2 = max(dot(normal, pointLightDirection), 0.0);\n' +
+	// Calculate the color due to diffuse reflection of point light
 	'  vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n' +
+	// Calculate the color due to ambient reflection
 	'  vec3 ambient = u_AmbientLight * a_Color.rgb;\n' +
 	'  v_Color = vec4(ambient + diffuse + diffuse2, a_Color.a);\n' +
 	// Use the negative z value of each vertex in view coordinate system
@@ -327,22 +337,24 @@ function drawEverything(gl, canvas) {
 	viewProjMatrix.set(projMatrix).multiply(viewMatrix);
 	for (var i = 0; i < textureArticleList.length; i++) {
 		var textureArticle = textureArticleList[i];
-		modelMatrix.setTranslate(textureArticle.translate[0],
-				textureArticle.translate[1], textureArticle.translate[2]);
-		modelMatrix.scale(textureArticle.scale[0], textureArticle.scale[1],
-				textureArticle.scale[2]);
-		gl.uniformMatrix4fv(textureProgram.u_ModelMatrix, false,
-				modelMatrix.elements);
-		// Calculate the model view projection matrix
-		mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
-		gl.uniformMatrix4fv(textureProgram.u_MvpMatrix, false,
-				mvpMatrix.elements);
-		initAttributeVariable(gl, textureProgram.a_Position,
-				textureArticle.vertexBuffer);
-		initAttributeVariable(gl, textureProgram.a_TexCoord,
-				textureArticle.texCoordBuffer);
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
+		// If texture image is not ready, don't draw.
 		if (textureArticle.texureObject.isTextureImageReady) {
+			// Calculate and set model matrix.
+			modelMatrix.setTranslate(textureArticle.translate[0],
+				textureArticle.translate[1], textureArticle.translate[2]);
+			modelMatrix.scale(textureArticle.scale[0], textureArticle.scale[1],
+				textureArticle.scale[2]);
+			gl.uniformMatrix4fv(textureProgram.u_ModelMatrix, false,
+				modelMatrix.elements);
+			// Calculate and set model view projection matrix
+			mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
+			gl.uniformMatrix4fv(textureProgram.u_MvpMatrix, false,
+				mvpMatrix.elements);
+			initAttributeVariable(gl, textureProgram.a_Position,
+				textureArticle.vertexBuffer);
+			initAttributeVariable(gl, textureProgram.a_TexCoord,
+				textureArticle.texCoordBuffer);
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
 			gl.bindTexture(gl.TEXTURE_2D, textureArticle.texureObject.texture);
 			// Set the texture unit 0 to the sampler
 			gl.uniform1i(textureProgram.u_Sampler, 0);
@@ -385,9 +397,11 @@ function drawEverything(gl, canvas) {
 		if (solidArticle.drawingInfo) {
 			modelMatrix.setIdentity();
 			for (var j = 0; j < solidArticle.transform.length; j++) {
-				var trans = solidArticle.transform[j];
-				if (trans.type === "translate") {
+				var transform = solidArticle.transform[j];
+				// Calculate model matrix for every solid article.
+				if (transform.type === "translate") {
 					if (solidArticle.objname === "bird") {
+						// Calculate new currentAngle to make an animation.
 						currentAngle = (currentAngle + (90.0 * deltaTime) / 1000.0) % 360.0;
 						var angle = currentAngle * Math.PI / 180.0;
 						modelMatrix.translate(10.0 * Math.sin(angle),
@@ -395,26 +409,28 @@ function drawEverything(gl, canvas) {
 										.cos(angle));
 						modelMatrix.rotate(currentAngle, 0.0, 1.0, 0.0);
 					} else {
-						modelMatrix.translate(trans.content[0],
-								trans.content[1], trans.content[2]);
+						modelMatrix.translate(transform.content[0],
+								transform.content[1], transform.content[2]);
 					}
-				} else if (trans.type === "rotate") {
-					modelMatrix.rotate(trans.content[0], trans.content[1],
-							trans.content[2], trans.content[3]);
-				} else if (trans.type === "scale") {
-					modelMatrix.scale(trans.content[0], trans.content[1],
-							trans.content[2]);
+				} else if (transform.type === "rotate") {
+					modelMatrix.rotate(transform.content[0], transform.content[1],
+							transform.content[2], transform.content[3]);
+				} else if (transform.type === "scale") {
+					modelMatrix.scale(transform.content[0], transform.content[1],
+							transform.content[2]);
 				}
 			}
+			// Set model matrix
 			gl.uniformMatrix4fv(solidProgram.u_ModelMatrix, false,
 					modelMatrix.elements);
 			mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
-
+			// Set model view projection matrix
 			gl.uniformMatrix4fv(solidProgram.u_MvpMatrix, false,
 					mvpMatrix.elements);
-
+			// Compute normal matrix.
 			normalMatrix.setInverseOf(modelMatrix);
 			normalMatrix.transpose();
+			// Set normal matrix.
 			gl.uniformMatrix4fv(solidProgram.u_NormalMatrix, false,
 					normalMatrix.elements);
 			initAttributeVariable(gl, solidProgram.a_Position,
@@ -516,6 +532,7 @@ function getElapsedTime() {
 	return elapsedTime;
 }
 
+// This function is to calculate camera parameters
 function calculateCameraParameters(move, rotate) {
 	var angle = rotate * Math.PI / 180.0;
 	if (keypressStatus.forward || keypressStatus.back) {
@@ -552,6 +569,7 @@ function calculateCameraParameters(move, rotate) {
 	}
 }
 
+// This function is to update fogDist according to keypressStatus.
 function updateFogDist() {
 	if (keypressStatus.decreaseFog) {
 		fogDist[1] += 1;
