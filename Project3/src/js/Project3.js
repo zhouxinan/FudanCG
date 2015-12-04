@@ -24,7 +24,7 @@ var fogColor = new Float32Array([0.137, 0.231, 0.423]);
 var fogDist = new Float32Array([55, 80]);
 
 // The keycode map is to map javascript keycodes to motions.
-var keycodeMap = {
+var keyCodeMap = {
 	'87': 'forward',
 	'83': 'back',
 	'65': 'left',
@@ -67,14 +67,14 @@ document.onkeyup = function(e) {
 function setKeypressStatus(e, status) {
 	// Use either which or keyCode, depending on browser support
 	var keyCode = e.which || e.keyCode;
-	keypressStatus[keycodeMap[keyCode]] = status;
+	keypressStatus[keyCodeMap[keyCode]] = status;
 }
 
 // Texture vertex shader program, which is used to draw the box and the ground.
 var TEXTURE_VSHADER_SOURCE =
-	'attribute vec4 a_Position;\n' +
-	'attribute vec2 a_TexCoord;\n' +
-	'uniform mat4 u_MvpMatrix;\n' +
+	'attribute vec4 a_Position;\n' +			// Vertex position
+	'attribute vec2 a_TexCoord;\n' +			// Texture coordinate
+	'uniform mat4 u_MvpMatrix;\n' +				// Model view projection matrix
 	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
 	'varying vec2 v_TexCoord;\n' +
@@ -99,28 +99,27 @@ var TEXTURE_FSHADER_SOURCE =
 	'void main() {\n' +
 	// Calculation of fog factor (factor becomes smaller as it goes further away from eye point)
   	'  float fogFactor = clamp((u_FogDist.y - v_Dist) / (u_FogDist.y - u_FogDist.x), 0.0, 1.0);\n' +
-     // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
     '  vec4 color = texture2D(u_Sampler, v_TexCoord);\n' +
     '  vec3 ambient = u_AmbientLight * color.rgb;\n' +
-    '  vec3 diffuse2 = u_PointLightColor * color.rgb;\n' +
+    '  vec3 diffuse = u_PointLightColor * color.rgb;\n' +
     '  if (u_isPointLightOn) {\n' +
-  	'    color = vec4(color.rgb+ambient+diffuse2, color.a);\n' +
+  	'    color = vec4(color.rgb+ambient+diffuse, color.a);\n' +
   	'  } else {\n' +
   	'    color = vec4(color.rgb+ambient, color.a);\n' +
   	'  }\n' +
-  	'    color = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
-	'    gl_FragColor = color;\n' +
+  	// Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + color * fogFactor
+	'    gl_FragColor = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
 	'}\n';
 
-// Solid vertex shader program, which is used to draw other articles from the .obj files.
+// Solid vertex shader program, which is used to draw articles from the .obj files.
 var SOLID_VSHADER_SOURCE =
-	'attribute vec4 a_Position;\n' +
-	'attribute vec4 a_Color;\n' +
-	'attribute vec4 a_Normal;\n' +
-	'uniform mat4 u_MvpMatrix;\n' +
+	'attribute vec4 a_Position;\n' +			// Vertex position
+	'attribute vec4 a_Color;\n' +				// Vertex color
+	'attribute vec4 a_Normal;\n' +				// Normal
+	'uniform mat4 u_MvpMatrix;\n' +				// Model view projection matrix
 	'uniform mat4 u_NormalMatrix;\n' +			// Transformation matrix of the normal
 	'uniform vec3 u_AmbientLight;\n' +			// Ambient light color
-	'uniform vec3 u_DirectionLight;\n' +		// Directional light
+	'uniform vec3 u_DirectionLight;\n' +		// Direction of directional light (in the world coordinate, normalized)
 	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'uniform vec3 u_PointLightColor;\n' +		// Point light color
 	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
@@ -132,16 +131,16 @@ var SOLID_VSHADER_SOURCE =
 	'  float nDotL = max(dot(normal, u_DirectionLight), 0.0);\n' +
 	'  vec3 diffuse = a_Color.rgb * nDotL;\n' +
 	'  vec4 vertexPosition = u_ModelMatrix * a_Position;\n' +
-	'  vec3 lightDirection = normalize(vec3(u_PointLightPosition-vertexPosition));\n' +
-	'  float nDotL2 = max(dot(normal, lightDirection), 0.0);\n' +
+	'  vec3 pointLightDirection = normalize(vec3(u_PointLightPosition - vertexPosition));\n' +
+	'  float nDotL2 = max(dot(normal, pointLightDirection), 0.0);\n' +
 	'  vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n' +
 	'  vec3 ambient = u_AmbientLight * a_Color.rgb;\n' +
-	'  v_Color = vec4(ambient+diffuse+diffuse2, a_Color.a);\n' +
+	'  v_Color = vec4(ambient + diffuse + diffuse2, a_Color.a);\n' +
 	// Use the negative z value of each vertex in view coordinate system
   	'  v_Dist = gl_Position.w;\n' +
 	'}\n';
 
-// Solid fragment shader program, which is used to draw other articles from the .obj files.
+// Solid fragment shader program, which is used to draw articles from the .obj files.
 var SOLID_FSHADER_SOURCE =
 	'precision mediump float;\n' +
 	'uniform vec3 u_FogColor;\n' + // Color of Fog
@@ -178,28 +177,6 @@ function main() {
 	}
 
 	// Get storage locations of attribute and uniform variables in program
-	// object for single color drawing
-	solidProgram.a_Position = gl.getAttribLocation(solidProgram, 'a_Position');
-	solidProgram.a_Color = gl.getAttribLocation(solidProgram, 'a_Color');
-	solidProgram.a_Normal = gl.getAttribLocation(solidProgram, 'a_Normal');
-	solidProgram.u_MvpMatrix = gl.getUniformLocation(solidProgram,
-			'u_MvpMatrix');
-	solidProgram.u_NormalMatrix = gl.getUniformLocation(solidProgram,
-			'u_NormalMatrix');
-	solidProgram.u_AmbientLight = gl.getUniformLocation(solidProgram,
-			'u_AmbientLight');
-	solidProgram.u_DirectionLight = gl.getUniformLocation(solidProgram,
-			'u_DirectionLight');
-	solidProgram.u_ModelMatrix = gl.getUniformLocation(solidProgram,
-			'u_ModelMatrix');
-	solidProgram.u_PointLightColor = gl.getUniformLocation(solidProgram,
-			'u_PointLightColor');
-	solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram,
-			'u_PointLightPosition');
-	solidProgram.u_FogColor = gl.getUniformLocation(solidProgram, 'u_FogColor');
-	solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDist');
-
-	// Get storage locations of attribute and uniform variables in program
 	// object for texture drawing
 	textureProgram.a_Position = gl.getAttribLocation(textureProgram,
 			'a_Position');
@@ -223,6 +200,28 @@ function main() {
 			'u_isPointLightOn');
 	textureProgram.u_AmbientLight = gl.getUniformLocation(textureProgram,
 			'u_AmbientLight');
+	
+	// Get storage locations of attribute and uniform variables in program
+	// object for single color drawing
+	solidProgram.a_Position = gl.getAttribLocation(solidProgram, 'a_Position');
+	solidProgram.a_Color = gl.getAttribLocation(solidProgram, 'a_Color');
+	solidProgram.a_Normal = gl.getAttribLocation(solidProgram, 'a_Normal');
+	solidProgram.u_MvpMatrix = gl.getUniformLocation(solidProgram,
+			'u_MvpMatrix');
+	solidProgram.u_NormalMatrix = gl.getUniformLocation(solidProgram,
+			'u_NormalMatrix');
+	solidProgram.u_AmbientLight = gl.getUniformLocation(solidProgram,
+			'u_AmbientLight');
+	solidProgram.u_DirectionLight = gl.getUniformLocation(solidProgram,
+			'u_DirectionLight');
+	solidProgram.u_ModelMatrix = gl.getUniformLocation(solidProgram,
+			'u_ModelMatrix');
+	solidProgram.u_PointLightColor = gl.getUniformLocation(solidProgram,
+			'u_PointLightColor');
+	solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram,
+			'u_PointLightPosition');
+	solidProgram.u_FogColor = gl.getUniformLocation(solidProgram, 'u_FogColor');
+	solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDist');
 
 	if (textureProgram.a_Position < 0 || textureProgram.a_TexCoord < 0
 			|| !textureProgram.u_MvpMatrix || !textureProgram.u_ModelMatrix
@@ -252,13 +251,13 @@ function main() {
 		return;
 	}
 
-	var obj = initVertexBuffersForTexObj(gl, boxRes);
+	var obj = initVertexBuffersForTexureObject(gl, boxRes);
 	obj.texObj = boxTexture;
 	obj.translate = boxRes.translate;
 	obj.scale = boxRes.scale;
 	textureArticleList.push(obj);
 
-	obj = initVertexBuffersForTexObj(gl, floorRes);
+	obj = initVertexBuffersForTexureObject(gl, floorRes);
 	obj.texObj = floorTexture;
 	obj.translate = floorRes.translate;
 	obj.scale = floorRes.scale;
@@ -360,8 +359,11 @@ function drawEverything(gl, canvas) {
 	gl.useProgram(solidProgram);
 	// Set ambient light color.
 	gl.uniform3fv(solidProgram.u_AmbientLight, sceneAmbientLight);
-	// Set directional light color.
-	gl.uniform3fv(solidProgram.u_DirectionLight, sceneDirectionLight);
+	// Set the light direction (in the world coordinate)
+	var directionLight = new Vector3(sceneDirectionLight);
+	// Normalize
+	directionLight.normalize();
+	gl.uniform3fv(solidProgram.u_DirectionLight, directionLight.elements);
 	// Set point light position.
 	gl.uniform4f(solidProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
@@ -434,7 +436,7 @@ function drawEverything(gl, canvas) {
 	}
 }
 
-function initVertexBuffersForTexObj(gl, res) {
+function initVertexBuffersForTexureObject(gl, res) {
 	var verticesCoords = new Float32Array(res.vertex);
 	var texCoords = new Float32Array(res.texCoord);
 	// Indices of the vertices
@@ -452,10 +454,10 @@ function initVertexBuffersForTexObj(gl, res) {
 	return o;
 }
 
-function initTextures(gl, tex, imagePath, program) {
-	// Create a texture object
-	tex.texture = gl.createTexture();
-	if (!tex.texture) {
+function initTextures(gl, textureObject, imagePath, program) {
+	// Create a texture
+	textureObject.texture = gl.createTexture();
+	if (!textureObject.texture) {
 		console.log('Failed to create the texture object');
 		return false;
 	}
@@ -467,26 +469,26 @@ function initTextures(gl, tex, imagePath, program) {
 	}
 	// Register the event handler to be called on loading an image
 	image.onload = function() {
-		loadTexture(gl, tex, program.u_Sampler, image);
-	};
+		loadTexture(gl, textureObject, program.u_Sampler, image);
+	}
 	// Tell the browser to load an image
 	image.src = imagePath;
 	return true;
 }
 
-function loadTexture(gl, tex, u_Sampler, image) {
+function loadTexture(gl, textureObject, u_Sampler, image) {
 	// Flip the image's y axis
 	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
 	// Enable texture unit0
 	gl.activeTexture(gl.TEXTURE0);
 	// Bind the texture object to the target
-	gl.bindTexture(gl.TEXTURE_2D, tex.texture);
+	gl.bindTexture(gl.TEXTURE_2D, textureObject.texture);
 	// Set the texture parameters
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	// Set the texture image
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
 	// Set the isTextureImageReady to true
-	tex.isTextureImageReady = 1;
+	textureObject.isTextureImageReady = 1;
 }
 
 function initArrayBufferForLaterUse(gl, data, num, type) {
