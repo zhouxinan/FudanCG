@@ -92,7 +92,6 @@ var TEXTURE_FSHADER_SOURCE =
 	'uniform vec3 u_FogColor;\n' + 				// Color of Fog
   	'uniform vec2 u_FogDist;\n' +  				// Distance of Fog (starting point, end point)
   	'uniform vec3 u_PointLightColor;\n' +		// Point light color
-  	'uniform bool u_isPointLightOn;\n' +
   	'uniform vec3 u_AmbientLight;\n' +			// Ambient light color
   	'varying vec2 v_TexCoord;\n' +
 	'varying float v_Dist;\n' +
@@ -102,11 +101,7 @@ var TEXTURE_FSHADER_SOURCE =
     '  vec4 color = texture2D(u_Sampler, v_TexCoord);\n' +
     '  vec3 ambient = u_AmbientLight * color.rgb;\n' +
     '  vec3 diffuse = u_PointLightColor * color.rgb;\n' +
-    '  if (u_isPointLightOn) {\n' +
   	'    color = vec4(color.rgb+ambient+diffuse, color.a);\n' +
-  	'  } else {\n' +
-  	'    color = vec4(color.rgb+ambient, color.a);\n' +
-  	'  }\n' +
   	// Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + color * fogFactor
 	'    gl_FragColor = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
 	'}\n';
@@ -196,8 +191,6 @@ function main() {
 			'u_FogDist');
 	textureProgram.u_PointLightColor = gl.getUniformLocation(textureProgram,
 			'u_PointLightColor');
-	textureProgram.u_isPointLightOn = gl.getUniformLocation(textureProgram,
-			'u_isPointLightOn');
 	textureProgram.u_AmbientLight = gl.getUniformLocation(textureProgram,
 			'u_AmbientLight');
 	
@@ -228,7 +221,6 @@ function main() {
 			|| !textureProgram.u_PointLightPosition
 			|| !textureProgram.u_Sampler || !textureProgram.u_FogColor
 			|| !textureProgram.u_FogDist || !textureProgram.u_PointLightColor
-			|| !textureProgram.u_isPointLightOn
 			|| !textureProgram.u_AmbientLight || solidProgram.a_Position < 0
 			|| solidProgram.a_Color < 0 || solidProgram.a_Normal < 0
 			|| !solidProgram.u_MvpMatrix || !solidProgram.u_NormalMatrix
@@ -297,8 +289,13 @@ function drawEverything(gl, canvas) {
 	gl.useProgram(textureProgram);
 	// Set ambient light color.
 	gl.uniform3fv(textureProgram.u_AmbientLight, sceneAmbientLight);
-	// Set point light color.
-	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
+	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
+	// Otherwise, set black color to u_PointLightColor.
+	if (keypressStatus.flashlight) {
+		gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
+	} else {
+		gl.uniform3f(textureProgram.u_PointLightColor, 0.0, 0.0, 0.0);
+	}
 	// Set point light position.
 	gl.uniform4f(textureProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
@@ -307,12 +304,6 @@ function drawEverything(gl, canvas) {
 	gl.uniform3fv(textureProgram.u_FogColor, fogColor);
 	// Starting point and end point
 	gl.uniform2fv(textureProgram.u_FogDist, fogDist);
-	// Set textureProgram.u_isPointLightOn to 1 if 'F' is pressed.
-	if (keypressStatus.flashlight) {
-		gl.uniform1i(textureProgram.u_isPointLightOn, 1);
-	} else {
-		gl.uniform1i(textureProgram.u_isPointLightOn, 0);
-	}
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
 	gl.enable(gl.DEPTH_TEST);
@@ -361,6 +352,13 @@ function drawEverything(gl, canvas) {
 
 	// Switch shader program.
 	gl.useProgram(solidProgram);
+	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
+	// Otherwise, set black color to u_PointLightColor.
+	if (keypressStatus.flashlight) {
+		gl.uniform3fv(solidProgram.u_PointLightColor, scenePointLightColor);
+	} else {
+		gl.uniform3f(solidProgram.u_PointLightColor, 0.0, 0.0, 0.0);
+	}
 	// Set ambient light color.
 	gl.uniform3fv(solidProgram.u_AmbientLight, sceneAmbientLight);
 	// Set the light direction (in the world coordinate)
@@ -375,13 +373,6 @@ function drawEverything(gl, canvas) {
 	gl.uniform3fv(solidProgram.u_FogColor, fogColor); // Colors
 	// Starting point and end point
 	gl.uniform2fv(solidProgram.u_FogDist, fogDist); 
-	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
-	// Otherwise, set black color to u_PointLightColor.
-	if (keypressStatus.flashlight) {
-		gl.uniform3fv(solidProgram.u_PointLightColor, scenePointLightColor);
-	} else {
-		gl.uniform3f(solidProgram.u_PointLightColor, 0.0, 0.0, 0.0);
-	}
 	for (var i = 0; i < ObjectList.length; i++) {
 		var solidArticle = ObjectList[i];
 		if (solidArticle.objDoc != null && solidArticle.objDoc.isMTLComplete()) {
