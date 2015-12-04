@@ -252,13 +252,13 @@ function main() {
 	}
 
 	var obj = initVertexBuffersForTexureObject(gl, boxRes);
-	obj.texObj = boxTexture;
+	obj.texureObject = boxTexture;
 	obj.translate = boxRes.translate;
 	obj.scale = boxRes.scale;
 	textureArticleList.push(obj);
 
 	obj = initVertexBuffersForTexureObject(gl, floorRes);
-	obj.texObj = floorTexture;
+	obj.texureObject = floorTexture;
 	obj.translate = floorRes.translate;
 	obj.scale = floorRes.scale;
 	textureArticleList.push(obj);
@@ -293,32 +293,36 @@ function main() {
 }
 
 function drawEverything(gl, canvas) {
+	// Switch shader program.
 	gl.useProgram(textureProgram);
 	// Set ambient light color.
 	gl.uniform3fv(textureProgram.u_AmbientLight, sceneAmbientLight);
+	// Set point light color.
+	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
 	// Set point light position.
 	gl.uniform4f(textureProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
-	// Pass fog color, distances, and eye point to uniform variable
+	// Pass fog color, distances to uniform variable
 	// Fog color
 	gl.uniform3fv(textureProgram.u_FogColor, fogColor);
 	// Starting point and end point
-	gl.uniform2fv(textureProgram.u_FogDist, fogDist); 
-	gl.uniform3fv(textureProgram.u_PointLightColor, scenePointLightColor);
+	gl.uniform2fv(textureProgram.u_FogDist, fogDist);
+	// Set textureProgram.u_isPointLightOn to 1 if 'F' is pressed.
 	if (keypressStatus.flashlight) {
 		gl.uniform1i(textureProgram.u_isPointLightOn, 1);
 	} else {
 		gl.uniform1i(textureProgram.u_isPointLightOn, 0);
 	}
-	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
-	// Otherwise, set black color to u_PointLightColor.
 	// Set clear color and enable hidden surface removal
 	gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
 	gl.enable(gl.DEPTH_TEST);
 	// Clear color and depth buffer
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	// Get elapsed time.
 	var deltaTime = getElapsedTime();
-	calculateFog();
+	// Update fogDist.
+	updateFogDist();
+	// Calculate camera parameters.
 	calculateCameraParameters((MOVE_VELOCITY * deltaTime) / 1000.0,
 			(ROT_VELOCITY * deltaTime) / 1000.0);
 	// Calculate the view matrix and the projection matrix
@@ -346,8 +350,8 @@ function drawEverything(gl, canvas) {
 		initAttributeVariable(gl, textureProgram.a_TexCoord,
 				textureArticle.texCoordBuffer);
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
-		if (textureArticle.texObj.isTextureImageReady) {
-			gl.bindTexture(gl.TEXTURE_2D, textureArticle.texObj.texture);
+		if (textureArticle.texureObject.isTextureImageReady) {
+			gl.bindTexture(gl.TEXTURE_2D, textureArticle.texureObject.texture);
 			// Set the texture unit 0 to the sampler
 			gl.uniform1i(textureProgram.u_Sampler, 0);
 			gl.drawElements(gl.TRIANGLES, textureArticle.numIndices,
@@ -367,10 +371,10 @@ function drawEverything(gl, canvas) {
 	// Set point light position.
 	gl.uniform4f(solidProgram.u_PointLightPosition, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
-	// Pass fog color, distances, and eye point to uniform variable
+	// Pass fog color, distances to uniform variable
 	gl.uniform3fv(solidProgram.u_FogColor, fogColor); // Colors
-	gl.uniform2fv(solidProgram.u_FogDist, fogDist); // Starting point and end
-													// point
+	// Starting point and end point
+	gl.uniform2fv(solidProgram.u_FogDist, fogDist); 
 	// If 'F' is pressed, set scenePointLightColor to u_PointLightColor.
 	// Otherwise, set black color to u_PointLightColor.
 	if (keypressStatus.flashlight) {
@@ -425,8 +429,7 @@ function drawEverything(gl, canvas) {
 					solidArticle.model.vertexBuffer);
 			initAttributeVariable(gl, solidProgram.a_Normal,
 					solidArticle.model.normalBuffer);
-			// Set article color.
-			gl.vertexAttrib3fv(solidProgram.a_Color, solidArticle.color);
+			initAttributeVariable(gl, solidProgram.a_Color, solidArticle.model.colorBuffer);
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,
 					solidArticle.model.indexBuffer);
 			gl.drawElements(gl.TRIANGLES,
@@ -434,24 +437,6 @@ function drawEverything(gl, canvas) {
 					0);
 		}
 	}
-}
-
-function initVertexBuffersForTexureObject(gl, res) {
-	var verticesCoords = new Float32Array(res.vertex);
-	var texCoords = new Float32Array(res.texCoord);
-	// Indices of the vertices
-	var indices = new Uint8Array(res.index);
-
-	var o = new Object();
-	o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
-	o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
-	o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices,
-			gl.UNSIGNED_BYTE);
-	// The number of vertices
-	o.numIndices = indices.length;
-	if (!o.vertexBuffer || !o.texCoordBuffer || !o.indexBuffer)
-		return null;
-	return o;
 }
 
 function initTextures(gl, textureObject, imagePath, program) {
@@ -574,7 +559,7 @@ function calculateCameraParameters(move, rotate) {
 	}
 }
 
-function calculateFog() {
+function updateFogDist() {
 	if (keypressStatus.decreaseFog) {
 		fogDist[1] += 1;
 		return;
@@ -586,20 +571,39 @@ function calculateFog() {
 	}
 }
 
-// Create an buffer object and perform an initial configuration
+// Create a buffer object and perform an initial configuration
 function initVertexBuffers(gl, program) {
-	// Utilize Object object to return multiple buffer
+	// Utilize Object to return multiple buffer objects together.
 	var o = new Object();
-	// objects
 	o.vertexBuffer = createEmptyArrayBuffer(gl, program.a_Position, 3, gl.FLOAT);
 	o.normalBuffer = createEmptyArrayBuffer(gl, program.a_Normal, 3, gl.FLOAT);
+	o.colorBuffer = createEmptyArrayBuffer(gl, program.a_Color, 4, gl.FLOAT);
 	o.indexBuffer = gl.createBuffer();
 	if (!o.vertexBuffer || !o.normalBuffer || !o.indexBuffer) {
 		return null;
 	}
-
+	// Unbind the buffer object
 	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+	return o;
+}
 
+function initVertexBuffersForTexureObject(gl, res) {
+	var verticesCoords = new Float32Array(res.vertex);
+	var texCoords = new Float32Array(res.texCoord);
+	// Indices of the vertices
+	var indices = new Uint8Array(res.index);
+	var o = new Object();
+	o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+	o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+	o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices,
+			gl.UNSIGNED_BYTE);
+	// The number of vertices
+	o.numIndices = indices.length;
+	if (!o.vertexBuffer || !o.texCoordBuffer || !o.indexBuffer) {
+		return null;
+	}
+	// Unbind the buffer object
+	gl.bindBuffer(gl.ARRAY_BUFFER, null);
 	return o;
 }
 
@@ -617,6 +621,7 @@ function createEmptyArrayBuffer(gl, a_attribute, num, type) {
 	gl.vertexAttribPointer(a_attribute, num, type, false, 0, 0);
 	// Enable the assignment
 	gl.enableVertexAttribArray(a_attribute);
+	// Keep the information necessary to assign to the attribute variable later
 	buffer.num = num;
 	buffer.type = gl.FLOAT;
 
@@ -643,6 +648,9 @@ function readOBJFile(fileName, gl, model, scale, reverse) {
 function onReadOBJFile(fileString, fileName, gl, o, scale, reverse) {
 	// Create a OBJDoc object
 	var objDoc = new OBJDoc(fileName);
+	// Set color.
+	o.color.push(1.0);
+	objDoc.defaultColor = o.color;
 	// Parse the file
 	var result = objDoc.parse(fileString, scale, reverse);
 	if (!result) {
@@ -666,6 +674,9 @@ function onReadComplete(gl, model, objDoc) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, drawingInfo.normals, gl.STATIC_DRAW);
 
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.colorBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, drawingInfo.colors, gl.STATIC_DRAW);
+	
 	// Write the indices to the buffer object
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indexBuffer);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, drawingInfo.indices, gl.STATIC_DRAW);
