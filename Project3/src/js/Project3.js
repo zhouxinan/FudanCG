@@ -1,5 +1,5 @@
 // This array is to store texture articles (the floor and the box).
-var textureArticleList = [];
+var textureArticleList = [boxRes, floorRes];
 // This is the texture object of the box with isTextureImageReady property.
 var boxTexture = {
 	texture : -1,
@@ -250,17 +250,11 @@ function main() {
 		return;
 	}
 
-	var obj = initVertexBuffersForTexureObject(gl, boxRes);
-	obj.texureObject = boxTexture;
-	obj.translate = boxRes.translate;
-	obj.scale = boxRes.scale;
-	textureArticleList.push(obj);
-
-	obj = initVertexBuffersForTexureObject(gl, floorRes);
-	obj.texureObject = floorTexture;
-	obj.translate = floorRes.translate;
-	obj.scale = floorRes.scale;
-	textureArticleList.push(obj);
+	for (var i = 0; i < textureArticleList.length; i++) {
+		initVertexBuffersForTexureObject(gl, textureArticleList[i]);
+	}
+	textureArticleList[0].texureObject = boxTexture;
+	textureArticleList[1].texureObject = floorTexture;
 
 	for (var i = 0; i < ObjectList.length; i++) {
 		ObjectList[i].model = initVertexBuffers(gl, solidProgram);
@@ -591,19 +585,17 @@ function initVertexBuffersForTexureObject(gl, res) {
 	var texCoords = new Float32Array(res.texCoord);
 	// Indices of the vertices
 	var indices = new Uint8Array(res.index);
-	var o = new Object();
-	o.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
-	o.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
-	o.indexBuffer = initElementArrayBufferForLaterUse(gl, indices,
+	res.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+	res.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
+	res.indexBuffer = initElementArrayBufferForLaterUse(gl, indices,
 			gl.UNSIGNED_BYTE);
 	// The number of vertices
-	o.numIndices = indices.length;
-	if (!o.vertexBuffer || !o.texCoordBuffer || !o.indexBuffer) {
+	res.numIndices = indices.length;
+	if (!res.vertexBuffer || !res.texCoordBuffer || !res.indexBuffer) {
 		return null;
 	}
 	// Unbind the buffer object
 	gl.bindBuffer(gl.ARRAY_BUFFER, null);
-	return o;
 }
 
 // Create a buffer object, assign it to attribute variables, and enable the
