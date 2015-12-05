@@ -112,9 +112,8 @@ var TEXTURE_FSHADER_SOURCE =
     '  vec3 ambient = u_AmbientLight * color.rgb;\n' +
     // Calculate the color due to diffuse reflection
     '  vec3 diffuse = u_PointLightColor * color.rgb;\n' +
-  	'  color = vec4(color.rgb+ambient+diffuse, color.a);\n' +
   	// Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + color * fogFactor
-	'  gl_FragColor = vec4(mix(u_FogColor, vec3(color), fogFactor), color.a);\n' +
+	'  gl_FragColor = vec4(mix(u_FogColor, vec3(color.rgb + ambient + diffuse), fogFactor), color.a);\n' +
 	'}\n';
 
 // Solid vertex shader program, which is used to draw articles from the .obj files.
@@ -124,9 +123,9 @@ var SOLID_VSHADER_SOURCE =
 	'attribute vec4 a_Normal;\n' +				// Normal
 	'uniform mat4 u_MvpMatrix;\n' +				// Model view projection matrix
 	'uniform mat4 u_NormalMatrix;\n' +			// Transformation matrix of the normal
+	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'uniform vec3 u_AmbientLight;\n' +			// Ambient light color
 	'uniform vec3 u_DirectionLight;\n' +		// Direction of directional light (in the world coordinate, normalized)
-	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
 	'uniform vec3 u_PointLightColor;\n' +		// Point light color
 	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
 	'varying vec4 v_Color;\n' +
@@ -149,6 +148,7 @@ var SOLID_VSHADER_SOURCE =
 	'  vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n' +
 	// Calculate the color due to ambient reflection
 	'  vec3 ambient = u_AmbientLight * a_Color.rgb;\n' +
+	// Mix ambient, diffuse, diffuse2.
 	'  v_Color = vec4(ambient + diffuse + diffuse2, a_Color.a);\n' +
 	// Use the negative z value of each vertex in view coordinate system
   	'  v_Dist = gl_Position.w;\n' +
@@ -222,12 +222,12 @@ function main() {
 			'u_MvpMatrix');
 	solidProgram.u_NormalMatrix = gl.getUniformLocation(solidProgram,
 			'u_NormalMatrix');
+	solidProgram.u_ModelMatrix = gl.getUniformLocation(solidProgram,
+			'u_ModelMatrix');
 	solidProgram.u_AmbientLight = gl.getUniformLocation(solidProgram,
 			'u_AmbientLight');
 	solidProgram.u_DirectionLight = gl.getUniformLocation(solidProgram,
 			'u_DirectionLight');
-	solidProgram.u_ModelMatrix = gl.getUniformLocation(solidProgram,
-			'u_ModelMatrix');
 	solidProgram.u_PointLightColor = gl.getUniformLocation(solidProgram,
 			'u_PointLightColor');
 	solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram,
@@ -243,8 +243,8 @@ function main() {
 			|| !textureProgram.u_AmbientLight || solidProgram.a_Position < 0
 			|| solidProgram.a_Color < 0 || solidProgram.a_Normal < 0
 			|| !solidProgram.u_MvpMatrix || !solidProgram.u_NormalMatrix
-			|| !solidProgram.u_AmbientLight || !solidProgram.u_DirectionLight
-			|| !solidProgram.u_ModelMatrix || !solidProgram.u_PointLightColor
+			|| !solidProgram.u_ModelMatrix || !solidProgram.u_AmbientLight
+			|| !solidProgram.u_DirectionLight || !solidProgram.u_PointLightColor
 			|| !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor
 			|| !solidProgram.u_FogDist) {
 		console
@@ -452,18 +452,19 @@ function drawEverything(gl, canvas) {
 
 function initTextures(gl, textureObject, imagePath, program) {
 	// Create a texture
-	textureObject.texture = gl.createTexture();
-	if (!textureObject.texture) {
+	var texture = gl.createTexture();
+	if (!texture) {
 		console.log('Failed to create the texture object');
 		return false;
 	}
+	textureObject.texture = texture;
 	// Create the image object
 	var image = new Image();
 	if (!image) {
 		console.log('Failed to create the image object');
 		return false;
 	}
-	// Register the event handler to be called on loading an image
+	// Register the event handler to be called when image loading is completed
 	image.onload = function() {
 		loadTexture(gl, textureObject, program.u_Sampler, image);
 	}
