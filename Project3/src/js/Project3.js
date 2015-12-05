@@ -409,7 +409,7 @@ function drawEverything(gl, canvas) {
 						currentAngle = (currentAngle + (90.0 * deltaTime) / 1000.0) % 360.0;
 						var angle = currentAngle * Math.PI / 180.0;
 						modelMatrix.translate(10.0 * Math.sin(angle),
-								5.0 + 1.5 * Math.sin(angle * 2), 10.0 * Math
+								5.0 + 2 * Math.sin(angle * 2), 12.0 * Math
 										.cos(angle));
 						modelMatrix.rotate(currentAngle, 0.0, 1.0, 0.0);
 					} else {
