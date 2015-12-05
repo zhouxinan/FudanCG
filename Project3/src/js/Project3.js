@@ -1,14 +1,16 @@
 // This array is to store texture articles (the floor and the box).
 var textureArticleList = [boxRes, floorRes];
-// This is the texture object of the box with isTextureImageReady property.
+// This is the texture object of the box.
 var boxTexture = {
 	texture : -1,
-	isTextureImageReady : 0
+	isTextureImageReady : 0,
+	textureUnitID : 0
 };
-// This is the texture object of the floor with isTextureImageReady property.
+// This is the texture object of the floor.
 var floorTexture = {
 	texture : -1,
-	isTextureImageReady : 0
+	isTextureImageReady : 0,
+	textureUnitID : 1
 };
 // Two shader programs used in this project.
 var textureProgram;
@@ -309,7 +311,7 @@ function drawEverything(gl, canvas) {
 	} else {
 		gl.uniform3f(textureProgram.u_PointLightColor, 0.0, 0.0, 0.0);
 	}
-	// Set point light position.
+	// Set eye position.
 	gl.uniform4f(textureProgram.u_Eye, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
 	// Pass fog color, distances to uniform variable
@@ -358,8 +360,8 @@ function drawEverything(gl, canvas) {
 				textureArticle.texCoordBuffer);
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
 			gl.bindTexture(gl.TEXTURE_2D, textureArticle.texureObject.texture);
-			// Set the texture unit 0 to the sampler
-			gl.uniform1i(textureProgram.u_Sampler, 0);
+			// Set the texture unit number to the sampler
+			gl.uniform1i(textureProgram.u_Sampler, textureArticle.texureObject.textureUnitID);
 			gl.drawElements(gl.TRIANGLES, textureArticle.numIndices,
 					textureArticle.indexBuffer.type, 0);
 		}
@@ -476,8 +478,8 @@ function initTextures(gl, textureObject, imagePath, program) {
 function loadTexture(gl, textureObject, u_Sampler, image) {
 	// Flip the image's y axis
 	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-	// Enable texture unit0
-	gl.activeTexture(gl.TEXTURE0);
+	// Enable texture unit
+	gl.activeTexture(gl.TEXTURE0 + textureObject.textureUnitID);
 	// Bind the texture object to the target
 	gl.bindTexture(gl.TEXTURE_2D, textureObject.texture);
 	// Set the texture parameters
@@ -602,7 +604,9 @@ function initVertexBuffers(gl, program) {
 }
 
 function initVertexBuffersForTexureObject(gl, res) {
+	// Vertex coordinates
 	var verticesCoords = new Float32Array(res.vertex);
+	// Texture coordinates
 	var texCoords = new Float32Array(res.texCoord);
 	// Indices of the vertices
 	var indices = new Uint8Array(res.index);
@@ -674,7 +678,7 @@ function onReadOBJFile(fileString, fileName, gl, o, scale, reverse) {
 	o.objDoc = objDoc;
 }
 
-// OBJ File has been read compreatly
+// OBJ File has been read completely
 function onReadComplete(gl, model, objDoc) {
 	// Acquire the vertex coordinates from OBJ file
 	var drawingInfo = objDoc.getDrawingInfo();
