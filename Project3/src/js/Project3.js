@@ -270,6 +270,7 @@ function main() {
 	textureArticleList[0].texureObject = boxTexture;
 	textureArticleList[1].texureObject = floorTexture;
 
+	// Initialize vertex buffers for every solid article.
 	for (var i = 0; i < ObjectList.length; i++) {
 		ObjectList[i].model = initVertexBuffers(gl, solidProgram);
 		if (!ObjectList[i].model) {
@@ -354,6 +355,7 @@ function drawEverything(gl, canvas) {
 			mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
 			gl.uniformMatrix4fv(textureProgram.u_MvpMatrix, false,
 					mvpMatrix.elements);
+			// Initialize texture variables.
 			initAttributeVariable(gl, textureProgram.a_Position,
 					textureArticle.vertexBuffer);
 			initAttributeVariable(gl, textureProgram.a_TexCoord,
@@ -439,6 +441,7 @@ function drawEverything(gl, canvas) {
 			// Set normal matrix.
 			gl.uniformMatrix4fv(solidProgram.u_NormalMatrix, false,
 					normalMatrix.elements);
+			// Initialize texture variables.
 			initAttributeVariable(gl, solidProgram.a_Position,
 					solidArticle.model.vertexBuffer);
 			initAttributeVariable(gl, solidProgram.a_Normal,
@@ -454,6 +457,7 @@ function drawEverything(gl, canvas) {
 	}
 }
 
+// This function is to initialize textures.
 function initTextures(gl, textureObject, imagePath, program) {
 	// Create a texture
 	var texture = gl.createTexture();
@@ -477,6 +481,7 @@ function initTextures(gl, textureObject, imagePath, program) {
 	return true;
 }
 
+// This function is to load texture for a textureObject.
 function loadTexture(gl, textureObject, u_Sampler, image) {
 	// Flip the image's y axis
 	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
@@ -492,6 +497,7 @@ function loadTexture(gl, textureObject, u_Sampler, image) {
 	textureObject.isTextureImageReady = 1;
 }
 
+// This function is to initialize array buffer for later use.
 function initArrayBufferForLaterUse(gl, data, num, type) {
 	var buffer = gl.createBuffer(); // Create a buffer object
 	if (!buffer) {
@@ -509,6 +515,7 @@ function initArrayBufferForLaterUse(gl, data, num, type) {
 	return buffer;
 }
 
+// This function is to initialize element array buffer for later use.
 function initElementArrayBufferForLaterUse(gl, data, type) {
 	// Create a buffer object
 	var buffer = gl.createBuffer();
@@ -532,6 +539,7 @@ function initAttributeVariable(gl, a_attribute, buffer) {
 	gl.enableVertexAttribArray(a_attribute);
 }
 
+// This function is to get elapsed time since last call to this function.
 function getElapsedTime() {
 	var newTime = Date.now();
 	var elapsedTime = newTime - currentTime;
@@ -605,6 +613,7 @@ function initVertexBuffers(gl, program) {
 	return o;
 }
 
+// This function is to initialize vertex buffers for texture objects.
 function initVertexBuffersForTexureObject(gl, res) {
 	// Vertex coordinates
 	var verticesCoords = new Float32Array(res.vertex);
