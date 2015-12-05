@@ -18,6 +18,7 @@ var currentTime = Date.now();
 // These three parameters are used in the calculation of the view matrix.
 var eye = new Vector3(CameraPara.eye);
 var at = new Vector3(CameraPara.at);
+// Up direction should be normalized.
 var up = new Vector3(CameraPara.up).normalize();
 // Normalized eye direction and right-hand direction.
 var eyeDirection = VectorMinus(at, eye).normalize();
@@ -29,7 +30,7 @@ var fogColor = new Float32Array([ 0.137, 0.231, 0.423 ]);
 // Distance of fog [where fog starts, where fog completely covers object]
 var fogDist = new Float32Array([ 55, 80 ]);
 
-// The keycode map is to map javascript keycodes to motions.
+// The keyCode map is to map javascript keyCodes to motions.
 var keyCodeMap = {
 	'87' : 'forward',
 	'83' : 'back',
@@ -44,7 +45,7 @@ var keyCodeMap = {
 	'40' : 'decreaseFog'
 };
 
-// keypressStatus is to store key press status. 0 for a released key and 1 for a
+// keypressStatus is to store keypress status. 0 for a released key and 1 for a
 // pressed key.
 var keypressStatus = {
 	forward : 0,
@@ -83,13 +84,14 @@ var TEXTURE_VSHADER_SOURCE =
 	'attribute vec2 a_TexCoord;\n' +			// Texture coordinate
 	'uniform mat4 u_MvpMatrix;\n' +				// Model view projection matrix
 	'uniform mat4 u_ModelMatrix;\n' +			// Model matrix
-	'uniform vec4 u_PointLightPosition;\n' +	// Position of the point light source (in the world coordinate system)
+	'uniform vec4 u_Eye;\n' +					// Position of eye point (world coordinates)
 	'varying vec2 v_TexCoord;\n' +
 	'varying float v_Dist;\n' +
 	'void main() {\n' +
 	'  gl_Position = u_MvpMatrix * a_Position;\n' +
 	'  v_TexCoord = a_TexCoord;\n' +
-	'  v_Dist = distance(u_ModelMatrix * a_Position, u_PointLightPosition);\n' +
+	// Calculate the distance to each vertex from eye point
+	'  v_Dist = distance(u_ModelMatrix * a_Position, u_Eye);\n' +
 	'}\n';
 
 // Texture fragment shader program, which is used to draw the box and the ground.
@@ -198,8 +200,8 @@ function main() {
 			'u_MvpMatrix');
 	textureProgram.u_ModelMatrix = gl.getUniformLocation(textureProgram,
 			'u_ModelMatrix');
-	textureProgram.u_PointLightPosition = gl.getUniformLocation(textureProgram,
-			'u_PointLightPosition');
+	textureProgram.u_Eye = gl.getUniformLocation(textureProgram,
+			'u_Eye');
 	textureProgram.u_Sampler = gl.getUniformLocation(textureProgram,
 			'u_Sampler');
 	textureProgram.u_FogColor = gl.getUniformLocation(textureProgram,
@@ -235,7 +237,7 @@ function main() {
 
 	if (textureProgram.a_Position < 0 || textureProgram.a_TexCoord < 0
 			|| !textureProgram.u_MvpMatrix || !textureProgram.u_ModelMatrix
-			|| !textureProgram.u_PointLightPosition
+			|| !textureProgram.u_Eye
 			|| !textureProgram.u_Sampler || !textureProgram.u_FogColor
 			|| !textureProgram.u_FogDist || !textureProgram.u_PointLightColor
 			|| !textureProgram.u_AmbientLight || solidProgram.a_Position < 0
@@ -308,7 +310,7 @@ function drawEverything(gl, canvas) {
 		gl.uniform3f(textureProgram.u_PointLightColor, 0.0, 0.0, 0.0);
 	}
 	// Set point light position.
-	gl.uniform4f(textureProgram.u_PointLightPosition, eye.elements[0],
+	gl.uniform4f(textureProgram.u_Eye, eye.elements[0],
 			eye.elements[1], eye.elements[2], 1.0);
 	// Pass fog color, distances to uniform variable
 	// Fog color
