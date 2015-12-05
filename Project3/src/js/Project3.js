@@ -1,5 +1,5 @@
 // This array is to store texture articles (the floor and the box).
-var textureArticleList = [boxRes, floorRes];
+var textureArticleList = [ boxRes, floorRes ];
 // This is the texture object of the box.
 var boxTexture = {
 	texture : -1,
@@ -312,8 +312,8 @@ function drawEverything(gl, canvas) {
 		gl.uniform3f(textureProgram.u_PointLightColor, 0.0, 0.0, 0.0);
 	}
 	// Set eye position.
-	gl.uniform4f(textureProgram.u_Eye, eye.elements[0],
-			eye.elements[1], eye.elements[2], 1.0);
+	gl.uniform4f(textureProgram.u_Eye, eye.elements[0], eye.elements[1],
+			eye.elements[2], 1.0);
 	// Pass fog color, distances to uniform variable
 	// Fog color
 	gl.uniform3fv(textureProgram.u_FogColor, fogColor);
@@ -345,23 +345,24 @@ function drawEverything(gl, canvas) {
 		if (textureArticle.texureObject.isTextureImageReady) {
 			// Calculate and set model matrix.
 			modelMatrix.setTranslate(textureArticle.translate[0],
-				textureArticle.translate[1], textureArticle.translate[2]);
+					textureArticle.translate[1], textureArticle.translate[2]);
 			modelMatrix.scale(textureArticle.scale[0], textureArticle.scale[1],
-				textureArticle.scale[2]);
+					textureArticle.scale[2]);
 			gl.uniformMatrix4fv(textureProgram.u_ModelMatrix, false,
-				modelMatrix.elements);
+					modelMatrix.elements);
 			// Calculate and set model view projection matrix
 			mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
 			gl.uniformMatrix4fv(textureProgram.u_MvpMatrix, false,
-				mvpMatrix.elements);
+					mvpMatrix.elements);
 			initAttributeVariable(gl, textureProgram.a_Position,
-				textureArticle.vertexBuffer);
+					textureArticle.vertexBuffer);
 			initAttributeVariable(gl, textureProgram.a_TexCoord,
-				textureArticle.texCoordBuffer);
+					textureArticle.texCoordBuffer);
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
 			gl.bindTexture(gl.TEXTURE_2D, textureArticle.texureObject.texture);
 			// Set the texture unit number to the sampler
-			gl.uniform1i(textureProgram.u_Sampler, textureArticle.texureObject.textureUnitID);
+			gl.uniform1i(textureProgram.u_Sampler,
+					textureArticle.texureObject.textureUnitID);
 			gl.drawElements(gl.TRIANGLES, textureArticle.numIndices,
 					textureArticle.indexBuffer.type, 0);
 		}
@@ -417,11 +418,12 @@ function drawEverything(gl, canvas) {
 								transform.content[1], transform.content[2]);
 					}
 				} else if (transform.type === "rotate") {
-					modelMatrix.rotate(transform.content[0], transform.content[1],
-							transform.content[2], transform.content[3]);
+					modelMatrix.rotate(transform.content[0],
+							transform.content[1], transform.content[2],
+							transform.content[3]);
 				} else if (transform.type === "scale") {
-					modelMatrix.scale(transform.content[0], transform.content[1],
-							transform.content[2]);
+					modelMatrix.scale(transform.content[0],
+							transform.content[1], transform.content[2]);
 				}
 			}
 			// Set model matrix
@@ -610,7 +612,8 @@ function initVertexBuffersForTexureObject(gl, res) {
 	var texCoords = new Float32Array(res.texCoord);
 	// Indices of the vertices
 	var indices = new Uint8Array(res.index);
-	res.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3, gl.FLOAT);
+	res.vertexBuffer = initArrayBufferForLaterUse(gl, verticesCoords, 3,
+			gl.FLOAT);
 	res.texCoordBuffer = initArrayBufferForLaterUse(gl, texCoords, 2, gl.FLOAT);
 	res.indexBuffer = initElementArrayBufferForLaterUse(gl, indices,
 			gl.UNSIGNED_BYTE);
